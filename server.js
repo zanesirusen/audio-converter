@@ -11,6 +11,17 @@ const { v4: uuidv4 } = require('uuid');
 const FormData = require('form-data');
 require('dotenv').config();
 
+// ==== DECODE COOKIES DARI ENV (buat Railway) ====
+if (process.env.YT_COOKIES_B64) {
+    try {
+        const cookieContent = Buffer.from(process.env.YT_COOKIES_B64, 'base64').toString('utf-8');
+        fs.writeFileSync('./cookies.txt', cookieContent);
+        console.log(`[BOOT] ✅ Cookies decoded from env (${cookieContent.length} bytes)`);
+    } catch (err) {
+        console.error(`[BOOT] ❌ Failed to decode cookies:`, err.message);
+    }
+}
+
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
@@ -71,7 +82,7 @@ function detect(url) {
 // ============================================================
 // YT-DLP CONFIG — NO COOKIES MODE
 // ============================================================
-const CLIENTS = ['mweb', 'tv_embedded', 'web_safari', 'ios', 'android_vr', 'web'];
+const CLIENTS = ['tv', 'android', 'ios', 'mweb', 'web_safari', 'web'];
 const FFMPEG_LOC = path.join(__dirname, 'node_modules', 'ffmpeg-static');
 const DENO_PATH = path.join(process.env.USERPROFILE || process.env.HOME || '', '.deno', 'bin', 'deno.exe');
 
@@ -91,6 +102,20 @@ function ytdlpOpts(client, extra = {}) {
         maxSleepInterval: 3,
         ...extra
     };
+
+    // ==== PROXY (kalau ada di env) ====
+    if (process.env.YT_PROXY) {
+        opts.proxy = process.env.YT_PROXY;
+        console.log(`[YTDLP] Using proxy: ${process.env.YT_PROXY.slice(0, 30)}...`);
+    }
+
+    // ==== COOKIES (kalau file ada di Railway) ====
+    const cookiePath = process.env.YT_COOKIES_PATH || './cookies.txt';
+    if (fs.existsSync(cookiePath)) {
+        opts.cookies = cookiePath;
+        console.log(`[YTDLP] Using cookies: ${cookiePath}`);
+    }
+
     return opts;
 }
 

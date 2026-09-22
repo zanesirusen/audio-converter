@@ -82,7 +82,7 @@ function detect(url) {
 // ============================================================
 // YT-DLP CONFIG — NO COOKIES MODE
 // ============================================================
-const CLIENTS = ['tv', 'android', 'ios', 'mweb', 'web_safari', 'web'];
+const CLIENTS = ['mweb', 'web', 'ios', 'android', 'tv', 'web_safari'];
 const FFMPEG_LOC = path.join(__dirname, 'node_modules', 'ffmpeg-static');
 const DENO_PATH = path.join(process.env.USERPROFILE || process.env.HOME || '', '.deno', 'bin', 'deno.exe');
 

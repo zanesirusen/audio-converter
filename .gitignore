@@ -1,0 +1,35 @@
+cat > .gitignore << 'EOF'
+# Dependencies
+node_modules/
+
+# Downloads
+downloads/
+*.mp3
+*.m4a
+*.aac
+*.ogg
+*.opus
+*.flac
+*.wav
+*.wma
+
+# Environment
+.env
+.env.local
+
+# Cookies
+cookies.txt
+cookies.txt.bak
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+EOF

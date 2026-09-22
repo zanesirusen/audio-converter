@@ -1,8 +1,6 @@
 FROM node:20-slim
 
 # Install system dependencies
-# NOTE: python3-minimal dibutuhin sama yt-dlp-exec postinstall
-# TAPI jangan install pip — bikin error PEP 668
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
@@ -10,6 +8,10 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     python3-minimal \
     && rm -rf /var/lib/apt/lists/*
+
+# ⚡ FIX: Bikin symlink python -> python3
+# yt-dlp-exec postinstall nyari 'python', bukan 'python3'
+RUN ln -s /usr/bin/python3 /usr/bin/python
 
 # Install Deno
 RUN curl -fsSL https://deno.land/install.sh | sh
@@ -22,7 +24,7 @@ WORKDIR /app
 # Copy package files dulu
 COPY package*.json ./
 
-# Install node dependencies (yt-dlp-exec bakal auto-download binary-nya)
+# Install node dependencies
 RUN npm install --production
 
 # Copy sisa project

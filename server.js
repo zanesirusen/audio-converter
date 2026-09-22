@@ -880,8 +880,8 @@ setInterval(() => {
     }
 }, 600000);
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🎵 Audio Converter Web`);
     console.log(`   Mode: NO COOKIES (POT via EJS)`);
-    console.log(`   Buka: http://localhost:${PORT}\n`);
+    console.log(`   Buka: http://0.0.0.0:${PORT}\n`);
 });

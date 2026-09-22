@@ -34,8 +34,8 @@ COPY . .
 RUN mkdir -p downloads
 
 # Set port
-ENV PORT=7860
-EXPOSE 7860
+ENV PORT=3000
+EXPOSE 3000
 
 # Run server
 CMD ["node", "server.js"]

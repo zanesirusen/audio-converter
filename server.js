@@ -43,7 +43,6 @@ const upload = multer({
 });
 
 const sessions = new Map();
-const oauthStates = new Map();
 const requestBuckets = new Map();
 
 function rateLimit(req, res, next) {
@@ -118,13 +117,14 @@ app.get('/api/auth/me', (req, res) => {
 
 app.get('/api/auth/discord', (req, res) => {
     const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID?.trim();
+    const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET?.trim().replace(/^['"]|['"]$/g, '');
     const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI?.trim();
-    if (!DISCORD_CLIENT_ID || !DISCORD_REDIRECT_URI) {
+    if (!DISCORD_CLIENT_ID || !DISCORD_CLIENT_SECRET || !DISCORD_REDIRECT_URI) {
         return res.redirect('/?auth=failed&reason=unconfigured');
     }
-    const state = crypto.randomBytes(24).toString('hex');
-    oauthStates.set(state, Date.now());
-    setCookie(res, 'oauth_state', `${state}.${Date.now()}`, 300);
+    const statePayload = `${Date.now()}.${crypto.randomBytes(24).toString('hex')}`;
+    const stateSignature = crypto.createHmac('sha256', DISCORD_CLIENT_SECRET).update(statePayload).digest('hex');
+    const state = `${statePayload}.${stateSignature}`;
     const params = new URLSearchParams({
         client_id: DISCORD_CLIENT_ID,
         redirect_uri: DISCORD_REDIRECT_URI,
@@ -136,15 +136,21 @@ app.get('/api/auth/discord', (req, res) => {
 
 app.get('/api/auth/discord/callback', async (req, res) => {
     const { code, state } = req.query;
-    const stateTime = oauthStates.get(state);
-    const stateCookie = readCookies(req).oauth_state || '';
-    const [cookieState, cookieTimestamp] = stateCookie.split('.');
-    oauthStates.delete(state);
-    setCookie(res, 'oauth_state', '', 0);
-    const cookieAge = Date.now() - Number(cookieTimestamp);
-    const validCookieState = cookieState === state && Number.isFinite(cookieAge) && cookieAge >= 0 && cookieAge <= 300000;
-    const validMemoryState = stateTime && Date.now() - stateTime <= 300000;
-    if (!code || (!validCookieState && !validMemoryState)) return res.redirect('/?auth=failed&reason=state_expired');
+    const clientSecret = process.env.DISCORD_CLIENT_SECRET?.trim().replace(/^['"]|['"]$/g, '');
+    const stateParts = typeof state === 'string' ? state.split('.') : [];
+    const stateTimestamp = Number(stateParts[0]);
+    const stateSignature = stateParts.pop() || '';
+    const statePayload = stateParts.join('.');
+    const expectedSignature = clientSecret && statePayload
+        ? crypto.createHmac('sha256', clientSecret).update(statePayload).digest('hex')
+        : '';
+    const signaturesMatch = expectedSignature && stateSignature.length === expectedSignature.length
+        ? crypto.timingSafeEqual(Buffer.from(stateSignature), Buffer.from(expectedSignature))
+        : false;
+    const stateAge = Date.now() - stateTimestamp;
+    if (!code || !clientSecret || !signaturesMatch || !Number.isFinite(stateAge) || stateAge < 0 || stateAge > 300000) {
+        return res.redirect('/?auth=failed&reason=state_expired');
+    }
 
     try {
         const clientId = process.env.DISCORD_CLIENT_ID?.trim();

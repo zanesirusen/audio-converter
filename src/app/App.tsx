@@ -24,10 +24,22 @@ function pageFromPath(pathname: string): Page {
 export function App() {
   const history = useHistory();
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [page, setPage] = useState<Page>(() => pageFromPath(window.location.pathname));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  useEffect(() => { void getCurrentUser().then((data) => data.authenticated && setUser(data.user)); }, []);
+  useEffect(() => { void getCurrentUser().then((data) => data.authenticated && setUser(data.user)).finally(() => setAuthLoading(false)); }, []);
+  useEffect(() => {
+    const avatarElement = document.querySelector<HTMLElement>('.profile-card .avatar');
+    if (!avatarElement) return;
+    if (user?.avatar) {
+      avatarElement.classList.add('has-discord-avatar');
+      avatarElement.style.backgroundImage = `url(https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=96)`;
+    } else {
+      avatarElement.classList.remove('has-discord-avatar');
+      avatarElement.style.backgroundImage = '';
+    }
+  }, [page, user]);
   useEffect(() => {
     const handlePopState = () => setPage(pageFromPath(window.location.pathname));
     window.addEventListener('popstate', handlePopState);

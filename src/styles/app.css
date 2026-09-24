@@ -222,6 +222,7 @@ label { display: grid; gap: 6px; color: #a8b5cc; font-size: 9px; font-weight: 60
 .profile-card { padding: 15px; }
 .profile-row { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 9px; }
 .avatar { display: grid; place-items: center; width: 36px; height: 36px; color: #d8dfff; background: linear-gradient(135deg, #222b51, #7246bd); border-radius: 50%; font-weight: 700; }
+.avatar.has-discord-avatar { color: transparent; background-position: center; background-size: cover; background-repeat: no-repeat; }
 .profile-row strong { display: block; font-size: 11px; }
 .profile-row span { display: inline-block; color: #fff; background: #4930bd; border-radius: 4px; margin-top: 4px; padding: 2px 5px; font-size: 8px; }
 .profile-row > b { color: var(--muted); }

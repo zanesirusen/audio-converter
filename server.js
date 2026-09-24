@@ -101,7 +101,11 @@ app.use('/downloads', express.static(path.resolve(DIR), {
     }
 }));
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { dotfiles: 'allow' }));
+
+app.get('/.well-known/discord', (req, res) => {
+    res.type('text/plain; charset=utf-8').send('dh=81d6edbcc668c3802e22948da48c820fd34166aa');
+});
 
 app.get('/api/download/:filename', (req, res) => {
     const filename = path.basename(decodeURIComponent(req.params.filename));

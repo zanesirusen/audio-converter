@@ -117,9 +117,10 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 app.get('/api/auth/discord', (req, res) => {
-    const { DISCORD_CLIENT_ID, DISCORD_REDIRECT_URI } = process.env;
+    const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID?.trim();
+    const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI?.trim();
     if (!DISCORD_CLIENT_ID || !DISCORD_REDIRECT_URI) {
-        return res.redirect('/?auth=unconfigured');
+        return res.redirect('/?auth=failed&reason=unconfigured');
     }
     const state = crypto.randomBytes(24).toString('hex');
     oauthStates.set(state, Date.now());
@@ -136,15 +137,19 @@ app.get('/api/auth/discord/callback', async (req, res) => {
     const { code, state } = req.query;
     const stateTime = oauthStates.get(state);
     oauthStates.delete(state);
-    if (!code || !stateTime || Date.now() - stateTime > 300000) return res.redirect('/?auth=failed');
+    if (!code || !stateTime || Date.now() - stateTime > 300000) return res.redirect('/?auth=failed&reason=state_expired');
 
     try {
+        const clientId = process.env.DISCORD_CLIENT_ID?.trim();
+        const clientSecret = process.env.DISCORD_CLIENT_SECRET?.trim().replace(/^['"]|['"]$/g, '');
+        const redirectUri = process.env.DISCORD_REDIRECT_URI?.trim();
+        if (!clientId || !clientSecret || !redirectUri) throw new Error('Discord OAuth variables are incomplete.');
         const token = await axios.post('https://discord.com/api/oauth2/token', new URLSearchParams({
-            client_id: process.env.DISCORD_CLIENT_ID,
-            client_secret: process.env.DISCORD_CLIENT_SECRET,
+            client_id: clientId,
+            client_secret: clientSecret,
             grant_type: 'authorization_code',
             code,
-            redirect_uri: process.env.DISCORD_REDIRECT_URI
+            redirect_uri: redirectUri
         }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
         const profile = await axios.get('https://discord.com/api/users/@me', {
             headers: { Authorization: `${token.data.token_type} ${token.data.access_token}` }
@@ -154,8 +159,9 @@ app.get('/api/auth/discord/callback', async (req, res) => {
         setCookie(res, 'audio_session', sessionId);
         res.redirect('/?auth=success');
     } catch (error) {
+        const reason = error.response?.data?.error || (error.message.includes('variables') ? 'unconfigured' : 'oauth_exchange_failed');
         console.error('[AUTH] Discord OAuth failed:', error.response?.data || error.message);
-        res.redirect('/?auth=failed');
+        res.redirect(`/?auth=failed&reason=${encodeURIComponent(reason)}`);
     }
 });
 

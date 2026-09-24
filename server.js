@@ -129,7 +129,8 @@ app.get('/api/auth/discord', (req, res) => {
         client_id: DISCORD_CLIENT_ID,
         redirect_uri: DISCORD_REDIRECT_URI,
         response_type: 'code',
-        scope: 'identify'
+        scope: 'identify',
+        state
     });
     res.redirect(`https://discord.com/oauth2/authorize?${params}`);
 });

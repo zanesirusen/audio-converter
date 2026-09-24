@@ -7,8 +7,11 @@ const cheerio = require('cheerio');
 const youtubedl = require('yt-dlp-exec');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
+const ffprobePath = require('ffprobe-static').path;
 const { v4: uuidv4 } = require('uuid');
 const FormData = require('form-data');
+const crypto = require('crypto');
+const multer = require('multer');
 require('dotenv').config();
 
 // ==== DECODE COOKIES DARI ENV (buat Railway) ====
@@ -23,14 +26,59 @@ if (process.env.YT_COOKIES_B64) {
 }
 
 ffmpeg.setFfmpegPath(ffmpegPath);
+ffmpeg.setFfprobePath(ffprobePath);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DIR = './downloads';
+const DIR = path.join(__dirname, 'downloads');
 if (!fs.existsSync(DIR)) fs.mkdirSync(DIR);
 
+const upload = multer({
+    dest: DIR,
+    limits: { fileSize: 200 * 1024 * 1024 },
+    fileFilter: (req, file, callback) => {
+        if (file.mimetype.startsWith('audio/') || file.mimetype === 'application/octet-stream') return callback(null, true);
+        callback(new Error('File harus berupa audio.'));
+    }
+});
+
+const sessions = new Map();
+const oauthStates = new Map();
+const requestBuckets = new Map();
+
+function rateLimit(req, res, next) {
+    const now = Date.now();
+    const key = req.ip || req.socket.remoteAddress || 'unknown';
+    const bucket = requestBuckets.get(key) || { startedAt: now, count: 0 };
+    if (now - bucket.startedAt > 60000) {
+        bucket.startedAt = now;
+        bucket.count = 0;
+    }
+    bucket.count++;
+    requestBuckets.set(key, bucket);
+    if (bucket.count > 30) return res.status(429).json({ error: 'Terlalu banyak request. Coba lagi dalam satu menit.' });
+    next();
+}
+
+function setCookie(res, name, value, maxAge = 86400) {
+    res.setHeader('Set-Cookie', `${name}=${encodeURIComponent(value)}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax`);
+}
+
+function readCookies(req) {
+    return Object.fromEntries((req.headers.cookie || '').split(';').filter(Boolean).map(part => {
+        const [key, ...value] = part.trim().split('=');
+        return [key, decodeURIComponent(value.join('='))];
+    }));
+}
+
+function getSession(req) {
+    const sessionId = readCookies(req).audio_session;
+    return sessionId ? sessions.get(sessionId) : null;
+}
+
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '2mb' }));
+app.use('/api', rateLimit);
 
 // ==== STATIC DOWNLOADS — dengan Content-Type + Content-Disposition ====
 app.use('/downloads', express.static(path.resolve(DIR), {
@@ -56,16 +104,78 @@ app.use('/downloads', express.static(path.resolve(DIR), {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/api/download/:filename', (req, res) => {
+    const filename = path.basename(decodeURIComponent(req.params.filename));
+    const filePath = path.join(DIR, filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File sudah tidak tersedia.' });
+    res.download(filePath, filename, { dotfiles: 'deny' });
+});
+
+app.get('/api/auth/me', (req, res) => {
+    const session = getSession(req);
+    res.json({ authenticated: Boolean(session), user: session?.user || null });
+});
+
+app.get('/api/auth/discord', (req, res) => {
+    const { DISCORD_CLIENT_ID, DISCORD_REDIRECT_URI } = process.env;
+    if (!DISCORD_CLIENT_ID || !DISCORD_REDIRECT_URI) {
+        return res.redirect('/?auth=unconfigured');
+    }
+    const state = crypto.randomBytes(24).toString('hex');
+    oauthStates.set(state, Date.now());
+    const params = new URLSearchParams({
+        client_id: DISCORD_CLIENT_ID,
+        redirect_uri: DISCORD_REDIRECT_URI,
+        response_type: 'code',
+        scope: 'identify'
+    });
+    res.redirect(`https://discord.com/oauth2/authorize?${params}`);
+});
+
+app.get('/api/auth/discord/callback', async (req, res) => {
+    const { code, state } = req.query;
+    const stateTime = oauthStates.get(state);
+    oauthStates.delete(state);
+    if (!code || !stateTime || Date.now() - stateTime > 300000) return res.redirect('/?auth=failed');
+
+    try {
+        const token = await axios.post('https://discord.com/api/oauth2/token', new URLSearchParams({
+            client_id: process.env.DISCORD_CLIENT_ID,
+            client_secret: process.env.DISCORD_CLIENT_SECRET,
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: process.env.DISCORD_REDIRECT_URI
+        }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+        const profile = await axios.get('https://discord.com/api/users/@me', {
+            headers: { Authorization: `${token.data.token_type} ${token.data.access_token}` }
+        });
+        const sessionId = crypto.randomBytes(32).toString('hex');
+        sessions.set(sessionId, { user: profile.data, createdAt: Date.now() });
+        setCookie(res, 'audio_session', sessionId);
+        res.redirect('/?auth=success');
+    } catch (error) {
+        console.error('[AUTH] Discord OAuth failed:', error.response?.data || error.message);
+        res.redirect('/?auth=failed');
+    }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+    const sessionId = readCookies(req).audio_session;
+    if (sessionId) sessions.delete(sessionId);
+    setCookie(res, 'audio_session', '', 0);
+    res.json({ success: true });
+});
+
 // ==== FORMAT AUDIO ====
 const FORMATS = {
     mp3:  { codec: 'libmp3lame', bitrate: '320k', ext: 'mp3' },
-    m4a:  { codec: 'aac',        bitrate: '256k', ext: 'm4a' },
-    aac:  { codec: 'aac',        bitrate: '256k', ext: 'aac' },
+    m4a:  { codec: 'aac',        bitrate: '256k', ext: 'm4a', container: 'ipod' },
+    aac:  { codec: 'aac',        bitrate: '256k', ext: 'aac', container: 'adts' },
     ogg:  { codec: 'libvorbis',  bitrate: '256k', ext: 'ogg' },
     opus: { codec: 'libopus',    bitrate: '192k', ext: 'opus' },
     flac: { codec: 'flac',       bitrate: null,   ext: 'flac' },
     wav:  { codec: 'pcm_s16le',  bitrate: null,   ext: 'wav' },
-    wma:  { codec: 'wmav2',      bitrate: '192k', ext: 'wma' }
+    wma:  { codec: 'wmav2',      bitrate: '192k', ext: 'wma', container: 'asf' }
 };
 
 // ==== DETECT PLATFORM ====
@@ -82,7 +192,7 @@ function detect(url) {
 // ============================================================
 // YT-DLP CONFIG — NO COOKIES MODE
 // ============================================================
-const CLIENTS = ['mweb', 'web', 'ios', 'android', 'tv', 'web_safari'];
+const CLIENTS = ['android', 'mweb', 'web', 'ios', 'tv', 'web_safari'];
 const FFMPEG_LOC = path.join(__dirname, 'node_modules', 'ffmpeg-static');
 const DENO_PATH = path.join(process.env.USERPROFILE || process.env.HOME || '', '.deno', 'bin', 'deno.exe');
 
@@ -124,7 +234,8 @@ function isBotErr(e) {
     return m.includes('sign in') || m.includes('bot') || m.includes('403')
         || m.includes('forbidden') || m.includes('unable to extract')
         || m.includes('no video formats') || m.includes('player response')
-        || m.includes('requested format') || m.includes('page needs to be reloaded');
+        || m.includes('requested format') || m.includes('page needs to be reloaded')
+        || m.includes('format is not available');
 }
 
 // ==== SANITIZE — strip emoji, non-ASCII, Windows-illegal, URL-illegal ====
@@ -353,7 +464,8 @@ async function getYtdlpMeta(url, platform) {
             console.log(`[META] ${client} → ${url}`);
             const info = await youtubedl(url, ytdlpOpts(client, {
                 dumpSingleJson: true,
-                skipDownload: true
+                skipDownload: true,
+                format: 'best'
             }));
             console.log(`[META] ✅ ${client}: title="${info.title}"`);
             return {
@@ -401,7 +513,8 @@ async function ytSearch(query) {
         try {
             const info = await youtubedl(`ytsearch1:${query}`, ytdlpOpts(client, {
                 dumpSingleJson: true,
-                skipDownload: true
+                skipDownload: true,
+                format: 'best'
             }));
             console.log(`[SEARCH] ✅ ${client}: ${info.webpage_url}`);
             return {
@@ -463,16 +576,21 @@ async function download(url, platform, title = null) {
 }
 
 // ==== CONVERT ====
-function convert(input, format, speed = 1.0, amplifyDb = 0) {
+function convert(input, format, speed = 1.0, amplifyDb = 0, options = {}) {
     return new Promise((resolve, reject) => {
         const fmt = FORMATS[format];
-        const base = path.basename(input, path.extname(input));
+        const base = options.outputBase || path.basename(input, path.extname(input));
         const speedTag = speed !== 1.0 ? `_${speed}x` : '';
         const ampTag = amplifyDb !== 0 ? `_${amplifyDb}dB` : '';
         const out = path.join(DIR, `${base}${speedTag}${ampTag}.${fmt.ext}`);
 
+        const stderrLines = [];
+        let commandLine = '';
         const cmd = ffmpeg(input).noVideo();
         const filters = [];
+
+        if (options.normalize) filters.push('dynaudnorm=f=150:g=15');
+        if (options.removeSilence) filters.push('silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-45dB');
 
         if (speed !== 1.0) {
             let s = speed;
@@ -488,12 +606,20 @@ function convert(input, format, speed = 1.0, amplifyDb = 0) {
 
         if (filters.length > 0) cmd.audioFilters(filters);
 
-        cmd.format(fmt.ext);
+        cmd.format(fmt.container || fmt.ext);
         if (fmt.codec) cmd.audioCodec(fmt.codec);
         if (fmt.bitrate) cmd.audioBitrate(fmt.bitrate);
 
-        cmd.on('end', () => resolve(out))
-           .on('error', reject)
+          cmd.on('start', command => { commandLine = command; })
+              .on('end', () => resolve(out))
+              .on('stderr', line => {
+                if (line.trim()) stderrLines.push(line.trim());
+              })
+              .on('error', error => {
+                  const relevant = stderrLines.filter(line => /error|failed|invalid|not available|unable|unknown/i.test(line)).slice(-4);
+                  error.message = `${error.message}${relevant.length ? `\nFFmpeg: ${relevant.join(' | ')}` : ''}${commandLine ? `\nCommand: ${commandLine}` : ''}`;
+                    reject(error);
+              })
            .save(out);
     });
 }
@@ -529,9 +655,10 @@ app.post('/api/detect', async (req, res) => {
     }
 });
 
-app.post('/api/convert', async (req, res) => {
-    const { url, format, speed, amplify } = req.body;
-    if (!url || !format) return res.status(400).json({ error: 'URL & format wajib.' });
+app.post('/api/convert', upload.single('file'), async (req, res) => {
+    const { url, format, speed, amplify, normalize, removeSilence } = req.body;
+    const uploadedFile = req.file;
+    if ((!url && !uploadedFile) || !format) return res.status(400).json({ error: 'URL atau file audio dan format wajib.' });
     if (!FORMATS[format]) return res.status(400).json({ error: `Format "${format}" nggak didukung.` });
 
     const speedNum = parseFloat(speed) || 1.0;
@@ -544,47 +671,61 @@ app.post('/api/convert', async (req, res) => {
         return res.status(400).json({ error: 'Amplify harus antara -20 dB dan +10 dB' });
     }
 
-    const platform = detect(url);
+    const platform = uploadedFile ? 'upload' : detect(url);
     if (!platform) return res.status(400).json({ error: 'Platform nggak dikenali.' });
 
     try {
-        const meta = await getMeta(url, platform);
-        console.log(`[CONVERT] Meta:`, meta);
+        let meta;
+        let sourcePath;
+        let sourceClient = 'upload';
+        let outputBase;
 
-        let target = url;
-        let duration = meta.duration;
+        if (uploadedFile) {
+            const probe = await new Promise((resolve, reject) => {
+                ffmpeg.ffprobe(uploadedFile.path, (error, data) => error ? reject(error) : resolve(data));
+            });
+            const audioStream = probe.streams?.find((stream) => stream.codec_type === 'audio');
+            meta = {
+                title: path.parse(uploadedFile.originalname).name || 'Uploaded audio',
+                artist: 'Local upload',
+                duration: fmtDur(Number(probe.format?.duration || audioStream?.duration || 0)),
+                thumbnail: null
+            };
+            sourcePath = uploadedFile.path;
+            outputBase = getUniquePrefix(sanitize(path.parse(uploadedFile.originalname).name));
+            console.log(`[CONVERT] Uploaded file:`, meta);
+        } else {
+            meta = await getMeta(url, platform);
+            console.log(`[CONVERT] Meta:`, meta);
 
-        if (platform === 'spotify' || platform === 'applemusic') {
-            const query = meta.search_query || `${meta.title} ${meta.artist}`.trim();
-            if (!query || query === ' ') {
-                throw new Error('Metadata kosong, nggak bisa search YouTube.');
+            let target = url;
+            let duration = meta.duration;
+
+            if (platform === 'spotify' || platform === 'applemusic') {
+                const query = meta.search_query || `${meta.title} ${meta.artist}`.trim();
+                if (!query || query === ' ') throw new Error('Metadata kosong, nggak bisa search YouTube.');
+                const searchResult = await ytSearch(query);
+                target = searchResult.url;
+                console.log(`[RESOLVE] ${platform} → ${target}`);
+                if ((!duration || duration === '0:00') && searchResult.duration) duration = fmtDur(searchResult.duration);
             }
-            const searchResult = await ytSearch(query);
-            target = searchResult.url;
-            console.log(`[RESOLVE] ${platform} → ${target}`);
 
-            if ((!duration || duration === '0:00') && searchResult.duration) {
-                duration = fmtDur(searchResult.duration);
-                console.log(`[RESOLVE] Duration dari YouTube: ${duration}`);
-            }
-        }
-
-        // ==== FILE TITLE: beda per platform ====
-        let fileTitle;
-        if (platform === 'spotify' || platform === 'applemusic') {
-            fileTitle = meta.artist && meta.artist !== 'Unknown'
+            const fileTitle = (platform === 'spotify' || platform === 'applemusic') && meta.artist && meta.artist !== 'Unknown'
                 ? `${meta.artist} - ${meta.title}`
                 : meta.title;
-        } else {
-            fileTitle = meta.title;
+            const dl = await download(target, platform, fileTitle);
+            sourcePath = dl.filePath;
+            sourceClient = dl.client;
+            meta = { ...meta, duration };
         }
 
-        const dl = await download(target, platform, fileTitle);
-        const converted = await convert(dl.filePath, format, speedNum, amplifyNum);
+        const converted = await convert(sourcePath, format, speedNum, amplifyNum, {
+            normalize: Boolean(normalize),
+            removeSilence: Boolean(removeSilence),
+            outputBase
+        });
 
-        if (converted !== dl.filePath) {
-            try { fs.unlinkSync(dl.filePath); } catch {}
-        }
+        try { fs.unlinkSync(sourcePath); } catch {}
 
         const name = path.basename(converted);
         const size = fs.statSync(converted).size;
@@ -600,9 +741,9 @@ app.post('/api/convert', async (req, res) => {
             playback_speed_normal: parseFloat(playbackNormal.toFixed(4)),
             title: meta.title,
             artist: meta.artist,
-            duration,
+            duration: meta.duration,
             thumbnail: meta.thumbnail,
-            client_used: dl.client,
+            client_used: sourceClient,
             file: {
                 name,
                 size_mb: (size / 1024 / 1024).toFixed(2),
@@ -894,6 +1035,12 @@ app.post('/api/roblox/check-status', async (req, res) => {
                 : 'Cek log server.'
         });
     }
+});
+
+// SPA fallback: allow direct refreshes on React routes such as /converter.
+app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/downloads/')) return next();
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 setInterval(() => {

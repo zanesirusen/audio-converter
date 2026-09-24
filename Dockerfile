@@ -24,11 +24,14 @@ WORKDIR /app
 # Copy package files dulu
 COPY package*.json ./
 
-# Install node dependencies
-RUN npm install --production
+# Install dependencies, including Vite for the production frontend build
+RUN npm install
 
 # Copy sisa project
 COPY . .
+
+# Build React frontend into public/ for Express to serve
+RUN npm run build
 
 # Bikin folder downloads
 RUN mkdir -p downloads

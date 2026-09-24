@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+:root {
+  font-family: 'DM Sans', sans-serif;
+  color: #edf3ff;
+  background: #050a13;
+  font-synthesis: none;
+  --bg: #050a13;
+  --surface: #09111f;
+  --surface-raised: #0d1728;
+  --surface-soft: rgba(17, 30, 52, .68);
+  --line: rgba(147, 177, 230, .15);
+  --muted: #8291ad;
+  --subtle: #53627d;
+  --text: #edf3ff;
+  --blue: #765bff;
+  --blue-bright: #5d8dff;
+  --cyan: #43d8cf;
+  --green: #45d9a6;
+  --gold: #e7ae5a;
+  --danger: #ff858e;
+  --shadow: 0 20px 60px rgba(0, 0, 0, .28);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  min-width: 320px;
+  background: radial-gradient(circle at 30% -10%, rgba(76, 88, 255, .13), transparent 34rem), radial-gradient(circle at 100% 20%, rgba(34, 178, 206, .07), transparent 31rem), var(--bg);
+}
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }

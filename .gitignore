@@ -1,4 +1,3 @@
-cat > .gitignore << 'EOF'
 # Dependencies
 node_modules/
 
@@ -32,6 +31,3 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
-EOF
-
-yt-dlp

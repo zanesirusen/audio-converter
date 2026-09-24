@@ -124,6 +124,7 @@ app.get('/api/auth/discord', (req, res) => {
     }
     const state = crypto.randomBytes(24).toString('hex');
     oauthStates.set(state, Date.now());
+    setCookie(res, 'oauth_state', `${state}.${Date.now()}`, 300);
     const params = new URLSearchParams({
         client_id: DISCORD_CLIENT_ID,
         redirect_uri: DISCORD_REDIRECT_URI,
@@ -136,8 +137,14 @@ app.get('/api/auth/discord', (req, res) => {
 app.get('/api/auth/discord/callback', async (req, res) => {
     const { code, state } = req.query;
     const stateTime = oauthStates.get(state);
+    const stateCookie = readCookies(req).oauth_state || '';
+    const [cookieState, cookieTimestamp] = stateCookie.split('.');
     oauthStates.delete(state);
-    if (!code || !stateTime || Date.now() - stateTime > 300000) return res.redirect('/?auth=failed&reason=state_expired');
+    setCookie(res, 'oauth_state', '', 0);
+    const cookieAge = Date.now() - Number(cookieTimestamp);
+    const validCookieState = cookieState === state && Number.isFinite(cookieAge) && cookieAge >= 0 && cookieAge <= 300000;
+    const validMemoryState = stateTime && Date.now() - stateTime <= 300000;
+    if (!code || (!validCookieState && !validMemoryState)) return res.redirect('/?auth=failed&reason=state_expired');
 
     try {
         const clientId = process.env.DISCORD_CLIENT_ID?.trim();

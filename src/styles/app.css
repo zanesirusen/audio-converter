@@ -4,7 +4,7 @@
 .topbar { height: 58px; display: flex; align-items: center; gap: 26px; padding: 0 28px; border-bottom: 1px solid var(--line); background: rgba(5, 10, 19, .88); backdrop-filter: blur(18px); position: sticky; top: 0; z-index: 5; }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 205px; font-family: 'Space Grotesk'; font-weight: 700; letter-spacing: .03em; }
 .brand small { display: block; color: var(--muted); font: 600 9px 'DM Sans'; letter-spacing: .13em; margin-top: 2px; }
-.brand-mark { display: grid; place-items: center; width: 33px; height: 33px; overflow: hidden; border-radius: 8px; color: transparent; background: #172044 url('/Profile.png') center / cover no-repeat; box-shadow: 0 8px 25px rgba(103, 72, 255, .34); font-size: 0; }
+.brand-mark { display: grid; place-items: center; width: 33px; height: 33px; overflow: hidden; border-radius: 50%; color: transparent; background: #172044 url('/Profile.png') center / cover no-repeat; box-shadow: 0 8px 25px rgba(103, 72, 255, .34); font-size: 0; }
 .brand-mark::before { content: ''; }
 .brand > span:last-child { font-size: 0; }
 .brand > span:last-child::before { content: '3Zane'; font: 700 15px 'Space Grotesk'; letter-spacing: .03em; }

@@ -293,16 +293,14 @@ export function App() {
           </button>
           <AuthPanel user={user} loading={authLoading} />
         </div>
-        {/* Mobile: auth shown next to hamburger */}
-        <div className="mobile-topbar-auth">
-          <AuthPanel user={user} loading={authLoading} />
-        </div>
       </header>
       <div className="dashboard-shell">
         <aside className={`sidebar ${mobileMenuOpen ? 'open' : ''}`}>
-          {/* Mobile close button inside sidebar */}
+          {/* Mobile sidebar header: profile + close button */}
           <div className="sidebar-mobile-header">
-            <span className="side-label" style={{ margin: 0 }}>Navigation</span>
+            <div className="sidebar-mobile-profile">
+              <AuthPanel user={user} loading={authLoading} />
+            </div>
             <button className="mobile-close-btn" type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>✕</button>
           </div>
           <div className="side-section">

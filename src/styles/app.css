@@ -584,7 +584,7 @@ label { font-size: 12px; }
    PUBLISH TO ROBLOX — in converter result card
    ================================================================ */
 .publish-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: wrap; }
-.publish-roblox-btn { display: inline-flex; align-items: center; gap: 7px; padding: 10px 18px; color: #fff; background: linear-gradient(135deg, #e7911a, #c47008); border: 0; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
+.publish-roblox-btn { display: inline-flex; align-items: center; gap: 7px; padding: 10px 18px; color: #fff; background: linear-gradient(135deg, var(--blue), var(--blue-bright)); border: 0; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
 .publish-roblox-btn:hover:not(:disabled) { opacity: .88; }
 .publish-roblox-btn:disabled { opacity: .55; cursor: default; }
 .publish-roblox-btn.published { background: linear-gradient(135deg, var(--green), #28a870); }
@@ -1195,3 +1195,18 @@ label { font-size: 12px; }
   .sidebar-mobile-auth .discord-button,
   .sidebar-mobile-auth .profile-button { width: 100%; justify-content: center; }
 }
+
+/* ================================================================
+   PUBLISH DETAIL CARD
+   ================================================================ */
+.publish-detail-card { margin-top: 10px; padding: 13px 15px; border: 1px solid rgba(69,217,166,.25); border-radius: 8px; background: rgba(69,217,166,.05); display: grid; gap: 8px; }
+.publish-detail-row { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; }
+.publish-detail-label { flex-shrink: 0; width: 70px; color: var(--muted); font-weight: 600; padding-top: 2px; }
+.publish-detail-value { flex: 1; color: var(--text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.publish-detail-value code { font-family: 'DM Sans', monospace; font-size: 11px; color: var(--cyan); background: rgba(67,216,207,.1); padding: 2px 6px; border-radius: 4px; word-break: break-all; }
+.publish-lua { font-size: 10px !important; }
+.publish-copy-btn { flex-shrink: 0; padding: 3px 9px; color: var(--cyan); background: rgba(67,216,207,.1); border: 1px solid rgba(67,216,207,.3); border-radius: 5px; font-size: 10px; font-weight: 700; cursor: pointer; }
+.publish-copy-btn:hover { background: rgba(67,216,207,.2); }
+.publish-detail-links { gap: 10px; }
+.publish-link { color: var(--blue-bright); font-size: 12px; font-weight: 600; text-decoration: underline; }
+.publish-link:hover { color: #fff; }

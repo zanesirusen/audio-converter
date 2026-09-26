@@ -41,6 +41,17 @@ interface QueueItem {
   error?: string;
 }
 
+// ── Publish state ─────────────────────────────────────────────
+interface PublishState {
+  busy: boolean;
+  ok: boolean;
+  msg: string;
+  assetId?: string;
+  assetName?: string;
+  dashboardUrl?: string;
+  storeUrl?: string;
+}
+
 function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
@@ -103,7 +114,8 @@ export function ConverterPanel({ onGoToSettings }: { onGoToSettings?: () => void
   const [copiedShare, setCopiedShare] = useState('');
   const [presetName, setPresetName] = useState('');
   const [showPresetSave, setShowPresetSave] = useState(false);
-  const [publishStates, setPublishStates] = useState<Record<string, { busy: boolean; msg: string; ok: boolean }>>({});
+  // Per-file publish state: fileName → { status, msg }
+  const [publishStates, setPublishStates] = useState<Record<string, PublishState>>({});
 
   const urlInputRef = useRef<HTMLInputElement>(null);
 
@@ -299,8 +311,49 @@ export function ConverterPanel({ onGoToSettings }: { onGoToSettings?: () => void
       });
       const data = await res.json() as { success: boolean; operation_id?: string; error?: string };
       if (!res.ok || !data.success) throw new Error(data.error || 'Publish failed.');
-      setPublishStates(prev => ({ ...prev, [fileName]: { busy: false, msg: `✅ Op ID: ${data.operation_id || 'processing'}`, ok: true } }));
-      toast('✅ Published to Roblox!', 'success');
+
+      setPublishStates(prev => ({ ...prev, [fileName]: { busy: true, msg: '⏳ Processing by Roblox…', ok: false } }));
+
+      // Poll for operation completion
+      if (data.operation_id) {
+        let assetId: string | null = null;
+        for (let i = 0; i < 12; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          try {
+            const statusRes = await fetch('/api/roblox/check-status', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ operation_id: data.operation_id, api_key: apiKey }),
+            });
+            const statusData = await statusRes.json() as { done: boolean; asset_id?: string; message?: string };
+            if (statusData.done && statusData.asset_id) {
+              assetId = statusData.asset_id;
+              break;
+            }
+          } catch { /* keep polling */ }
+        }
+
+        if (assetId) {
+          setPublishStates(prev => ({
+            ...prev,
+            [fileName]: {
+              busy: false,
+              ok: true,
+              msg: `✅ Published! Asset ID: ${assetId}`,
+              assetId,
+              assetName,
+              dashboardUrl: `https://create.roblox.com/dashboard/creations`,
+              storeUrl: `https://create.roblox.com/store/asset/${assetId}`,
+            } as PublishState,
+          }));
+          toast(`✅ Published! Asset ID: ${assetId}`, 'success', 5000);
+        } else {
+          setPublishStates(prev => ({ ...prev, [fileName]: { busy: false, msg: `⏳ Op ID: ${data.operation_id} — check dashboard`, ok: true } }));
+          toast('✅ Uploaded! Check Roblox dashboard for asset ID', 'success');
+        }
+      } else {
+        setPublishStates(prev => ({ ...prev, [fileName]: { busy: false, msg: '✅ Uploaded to Roblox!', ok: true } }));
+        toast('✅ Published to Roblox!', 'success');
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Publish failed.';
       setPublishStates(prev => ({ ...prev, [fileName]: { busy: false, msg: `✗ ${msg}`, ok: false } }));
@@ -394,9 +447,22 @@ export function ConverterPanel({ onGoToSettings }: { onGoToSettings?: () => void
                         </div>
                       ))}
                     </div>
-                    <button className="convert-button" onClick={() => void processQueue()} disabled={queueBusy || queue.every(i => i.status !== 'queued')}>
-                      {queueBusy ? 'Processing queue…' : `Convert ${queue.filter(i => i.status === 'queued').length} queued URLs`}
-                    </button>
+                    {(() => {
+                      const pendingCount = queue.filter(i => i.status === 'queued').length;
+                      const allDone = queue.every(i => i.status === 'done' || i.status === 'error');
+                      if (allDone) {
+                        return (
+                          <button className="secondary-button" style={{ width: '100%', marginTop: 8 }} onClick={() => setQueue([])}>
+                            ✓ All done — Clear queue
+                          </button>
+                        );
+                      }
+                      return (
+                        <button className="convert-button" onClick={() => void processQueue()} disabled={queueBusy || pendingCount === 0}>
+                          {queueBusy ? 'Processing queue…' : `Convert ${pendingCount} queued URL${pendingCount !== 1 ? 's' : ''}`}
+                        </button>
+                      );
+                    })()}
                   </>
                 )}
               </div>
@@ -612,6 +678,36 @@ export function ConverterPanel({ onGoToSettings }: { onGoToSettings?: () => void
                   {!robloxReady && !ps && <span className="publish-hint">API key & Creator ID belum di-save</span>}
                   {robloxReady && !ps && <span className="publish-hint ok">→ {robloxSettings.creatorName || robloxSettings.creatorId} ({robloxSettings.creatorType})</span>}
                 </div>
+                {/* Asset detail card after publish */}
+                {ps?.ok && ps.assetId && (
+                  <div className="publish-detail-card">
+                    <div className="publish-detail-row">
+                      <span className="publish-detail-label">Asset ID</span>
+                      <span className="publish-detail-value">
+                        <code>{ps.assetId}</code>
+                        <button className="publish-copy-btn" onClick={() => { void navigator.clipboard.writeText(ps.assetId!); toast('Asset ID copied!', 'success', 1500); }}>Copy</button>
+                      </span>
+                    </div>
+                    <div className="publish-detail-row">
+                      <span className="publish-detail-label">Name</span>
+                      <span className="publish-detail-value">{ps.assetName}</span>
+                    </div>
+                    <div className="publish-detail-row">
+                      <span className="publish-detail-label">Links</span>
+                      <span className="publish-detail-value publish-detail-links">
+                        <a href={ps.storeUrl} target="_blank" rel="noopener noreferrer" className="publish-link">Store page ↗</a>
+                        <a href={ps.dashboardUrl} target="_blank" rel="noopener noreferrer" className="publish-link">Dashboard ↗</a>
+                      </span>
+                    </div>
+                    <div className="publish-detail-row">
+                      <span className="publish-detail-label">Lua code</span>
+                      <span className="publish-detail-value">
+                        <code className="publish-lua">local sound = Instance.new("Sound"); sound.SoundId = "rbxassetid://{ps.assetId}"</code>
+                        <button className="publish-copy-btn" onClick={() => { void navigator.clipboard.writeText(`local sound = Instance.new("Sound")\nsound.SoundId = "rbxassetid://${ps.assetId}"\nsound.PlaybackSpeed = ${result.playback_speed_normal.toFixed(4)}\nsound.Parent = workspace`); toast('Lua code copied!', 'success', 1500); }}>Copy Lua</button>
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

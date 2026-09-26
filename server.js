@@ -14,7 +14,48 @@ const crypto = require('crypto');
 const multer = require('multer');
 const archiver = require('archiver');
 const { Pool } = require('pg');
+const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
+
+// ==== SUPABASE STORAGE ====
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://aukqqxorcdbqllvvflrj.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
+const SUPABASE_BUCKET = 'audio-files';
+let supabase = null;
+
+if (SUPABASE_URL && SUPABASE_KEY) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    console.log('[SUPABASE] ✅ Storage client ready.');
+} else {
+    console.log('[SUPABASE] ⚠ No credentials — files stored locally only.');
+}
+
+async function uploadToSupabase(filePath, fileName) {
+    if (!supabase) return null;
+    try {
+        const fileBuffer = fs.readFileSync(filePath);
+        const ext = path.extname(fileName).toLowerCase().replace('.', '');
+        const mimeTypes = {
+            mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav',
+            flac: 'audio/flac', m4a: 'audio/mp4', aac: 'audio/aac',
+            opus: 'audio/opus', wma: 'audio/x-ms-wma'
+        };
+        const contentType = mimeTypes[ext] || 'audio/mpeg';
+        const { error } = await supabase.storage
+            .from(SUPABASE_BUCKET)
+            .upload(fileName, fileBuffer, { contentType, upsert: true });
+        if (error) {
+            console.error('[SUPABASE] Upload error:', error.message);
+            return null;
+        }
+        const { data } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(fileName);
+        console.log(`[SUPABASE] ✅ Uploaded: ${data.publicUrl}`);
+        return data.publicUrl;
+    } catch (err) {
+        console.error('[SUPABASE] Upload failed:', err.message);
+        return null;
+    }
+}
 
 // ==== POSTGRESQL SETUP ====
 let db = null;
@@ -802,6 +843,9 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
 
         const playbackNormal = speedNum !== 1.0 ? (1 / speedNum) : 1.0;
 
+        // Upload ke Supabase Storage jika tersedia
+        const supabaseUrl = await uploadToSupabase(converted, name);
+
         res.json({
             success: true,
             platform,
@@ -814,11 +858,12 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
             duration: meta.duration,
             thumbnail: meta.thumbnail,
             client_used: sourceClient,
+            storage: supabaseUrl ? 'supabase' : 'local',
             file: {
                 name,
                 size_mb: (size / 1024 / 1024).toFixed(2),
-                // ⚡ Encode URL biar karakter aneh nggak bikin masalah di browser
-                url: `/downloads/${encodeURIComponent(name)}`
+                url: supabaseUrl || `/downloads/${encodeURIComponent(name)}`,
+                local_url: `/downloads/${encodeURIComponent(name)}`
             }
         });
     } catch (e) {
@@ -1371,10 +1416,10 @@ setInterval(() => {
     for (const f of fs.readdirSync(DIR)) {
         const fp = path.join(DIR, f);
         try {
-            if (Date.now() - fs.statSync(fp).mtimeMs > 3600000) fs.unlinkSync(fp);
+            if (Date.now() - fs.statSync(fp).mtimeMs > 7 * 24 * 3600000) fs.unlinkSync(fp); // 7 days
         } catch {}
     }
-}, 600000);
+}, 3600000); // check every hour
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🎵 Audio Converter Web`);

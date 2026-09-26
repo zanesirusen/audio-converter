@@ -9,7 +9,7 @@
 .brand > span:last-child { font-size: 0; }
 .brand > span:last-child::before { content: '3Zane'; font: 700 17px 'Space Grotesk'; letter-spacing: .03em; }
 .account { display: flex; align-items: center; gap: 9px; margin-left: auto; }
-.mobile-menu-toggle { display: none; align-items: center; justify-content: center; width: 36px; height: 36px; margin-right: 8px; color: var(--text); background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 9px; font-size: 18px; }
+.mobile-menu-toggle { display: none; align-items: center; justify-content: center; width: 36px; height: 36px; color: var(--text); background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 9px; font-size: 18px; }
 .mobile-menu-toggle:hover { background: var(--surface-raised); border-color: rgba(103, 127, 255, .7); }
 .icon-button { width: 34px; height: 34px; display: grid; place-items: center; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 8px; font-size: 17px; }
 .icon-button:hover { color: var(--text); background: var(--surface-raised); border-color: var(--line); }
@@ -1258,22 +1258,22 @@ label { font-size: 12px; }
     border-bottom: 1px solid var(--line) !important;
     background: rgba(5,10,19,.98) !important;
   }
-  /* hamburger kiri, brand di sebelahnya, account di kanan */
-  .mobile-menu-toggle { flex-shrink: 0; order: 0; }
+  /* Brand di kiri, hamburger di kanan */
   .topbar .brand { display: flex !important; min-width: auto !important; flex: 1; order: 1; }
-  .topbar .account {
-    display: flex !important;
-    order: 2;
-    gap: 6px;
-  }
-  /* Hanya tampilkan theme toggle di topbar mobile, hide auth */
+  .topbar .account { display: flex !important; order: 2; gap: 6px; }
   .topbar .account .auth-loading,
   .topbar .account .discord-button,
   .topbar .account .profile-button { display: none !important; }
+  /* Hamburger pindah ke kanan */
+  .mobile-menu-toggle {
+    order: 3;
+    margin-left: 0;
+    margin-right: 0;
+    flex-shrink: 0;
+  }
   .dashboard-main { padding-top: 64px !important; }
-  /* Sidebar below topbar */
   .sidebar { z-index: 8000 !important; top: 56px !important; }
-  /* Sidebar mobile header: hanya profile, tanpa close */
+  /* Sidebar: profile di atas tanpa close button */
   .sidebar-mobile-header {
     display: flex !important;
     align-items: center;
@@ -1289,9 +1289,7 @@ label { font-size: 12px; }
     font-size: 13px;
     gap: 9px;
   }
-  .sidebar-mobile-profile .profile-button img {
-    width: 28px; height: 28px; border-radius: 50%;
-  }
+  .sidebar-mobile-profile .profile-button img { width: 28px; height: 28px; border-radius: 50%; }
   .sidebar-mobile-auth { display: none !important; }
   .mobile-close-btn { display: none !important; }
 }

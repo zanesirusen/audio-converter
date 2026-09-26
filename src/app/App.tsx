@@ -295,6 +295,23 @@ export function App() {
       </header>
       <div className="dashboard-shell">
         <aside className={`sidebar ${mobileMenuOpen ? 'open' : ''}`}>
+          {/* Mobile header inside sidebar — close btn + auth */}
+          <div className="sidebar-mobile-header">
+            <a className="brand" href={routes.home} onClick={(e) => navigate(routes.home, e)}>
+              <span className="brand-mark">♫</span>
+              <span>3ZANE<small>audio workspace</small></span>
+            </a>
+            <div className="sidebar-mobile-actions">
+              <button className="icon-button theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
+                {theme === 'dark' ? '☀' : '☾'}
+              </button>
+              <button className="mobile-close-btn" type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>✕</button>
+            </div>
+          </div>
+          {/* Mobile auth row */}
+          <div className="sidebar-mobile-auth">
+            <AuthPanel user={user} loading={authLoading} />
+          </div>
           <div className="side-section">
             <span className="side-label">Workspace</span>
             {sideLink(routes.home, '⌂', 'Home')}

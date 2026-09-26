@@ -1159,3 +1159,39 @@ label { font-size: 12px; }
 .queue-converting { color: var(--cyan); background: rgba(67,216,207,.12); }
 .queue-done { color: var(--green); background: rgba(69,217,166,.1); }
 .queue-error { color: var(--danger); background: rgba(255,133,142,.1); }
+
+/* ================================================================
+   SIDEBAR MOBILE HEADER — close button + auth
+   ================================================================ */
+.sidebar-mobile-header { display: none; }
+.sidebar-mobile-auth { display: none; }
+
+@media (max-width: 820px) {
+  .sidebar-mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 4px 10px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 8px;
+  }
+  .sidebar-mobile-header .brand { min-width: auto; font-size: 13px; }
+  .sidebar-mobile-actions { display: flex; align-items: center; gap: 6px; }
+  .mobile-close-btn {
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    color: var(--text); background: rgba(255,255,255,.06);
+    border: 1px solid var(--line); border-radius: 8px;
+    font-size: 16px; cursor: pointer;
+  }
+  .mobile-close-btn:hover { background: rgba(255,255,255,.12); }
+  .sidebar-mobile-auth {
+    display: flex;
+    padding: 0 4px 10px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 8px;
+  }
+  .sidebar-mobile-auth .discord-button,
+  .sidebar-mobile-auth .profile-button { width: 100%; justify-content: center; }
+}

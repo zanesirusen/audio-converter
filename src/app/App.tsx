@@ -293,15 +293,13 @@ export function App() {
           </button>
           <AuthPanel user={user} loading={authLoading} />
         </div>
-      </header>
-      <div className="dashboard-shell">
+      </header>      <div className="dashboard-shell">
         <aside className={`sidebar ${mobileMenuOpen ? 'open' : ''}`}>
-          {/* Mobile sidebar header: profile + close button */}
+          {/* Mobile sidebar top: profile */}
           <div className="sidebar-mobile-header">
             <div className="sidebar-mobile-profile">
               <AuthPanel user={user} loading={authLoading} />
             </div>
-            <button className="mobile-close-btn" type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>✕</button>
           </div>
           <div className="side-section">
             <span className="side-label">Workspace</span>

@@ -58,7 +58,7 @@ export function RobloxSettingsPage() {
         warning?: string | null;
       };
       if (data.valid) {
-        setApiKeyStatus(`✓ ${data.message || 'API key valid.'}`);
+        setApiKeyStatus(`${data.message || 'API key valid.'}`);
         setApiKeyOk(true);
         setPermissions(data.permissions || []);
         setHasWrite(data.has_write ?? true);

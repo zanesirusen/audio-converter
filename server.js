@@ -846,6 +846,19 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
         // Upload ke Supabase Storage jika tersedia
         const supabaseUrl = await uploadToSupabase(converted, name);
 
+        // Log activity
+        const session = getSession(req);
+        logActivity({
+            username: session?.user?.global_name || session?.user?.username || 'Guest',
+            avatar: session?.user?.avatar ? `https://cdn.discordapp.com/avatars/${session.user.id}/${session.user.avatar}.png?size=32` : null,
+            userId: session?.user?.id || null,
+            title: meta.title,
+            artist: meta.artist,
+            format,
+            platform: platform === 'upload' ? 'upload' : platform,
+            fileName: name,
+        });
+
         res.json({
             success: true,
             platform,
@@ -1404,6 +1417,21 @@ app.post('/api/roblox-settings', async (req, res) => {
         console.error('[ROBLOX SETTINGS POST]', err.message);
         res.json({ success: true });
     }
+});
+
+// ============================================================
+// ACTIVITY FEED — recent conversions from all users
+// ============================================================
+const activityFeed = []; // max 20 items in memory
+const MAX_ACTIVITY = 20;
+
+function logActivity(item) {
+    activityFeed.unshift({ ...item, createdAt: new Date().toISOString() });
+    if (activityFeed.length > MAX_ACTIVITY) activityFeed.pop();
+}
+
+app.get('/api/activity', (req, res) => {
+    res.json({ activity: activityFeed.slice(0, 20) });
 });
 
 // SPA fallback: allow direct refreshes on React routes such as /converter.

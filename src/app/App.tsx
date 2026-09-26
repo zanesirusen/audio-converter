@@ -6,6 +6,7 @@ import { BulkConverterPanel } from '../features/converter/BulkConverterPanel';
 import { RobloxSettingsPage } from '../features/roblox/RobloxSettingsPage';
 import { AssetLibrary } from '../features/assets/AssetLibrary';
 import { HistoryList } from '../components/HistoryList';
+import { ActivityFeed } from '../components/ActivityFeed';
 import { ToastContainer } from '../components/Toast';
 import { getCurrentUser } from '../services/discord';
 import { AuthPanel, type AuthUser } from '../features/auth/AuthPanel';
@@ -204,7 +205,7 @@ export function App() {
               </div>
             </section>
             {systemStatus()}
-            <HistoryList />
+            <ActivityFeed />
           </aside>
         </div>
       </>
@@ -240,7 +241,7 @@ export function App() {
               <Link href={routes.history}><strong>◷</strong><b>Review activity</b><span>See conversion history and status.</span><small>View history →</small></Link>
             </div>
           </section>
-          <div className="overview-rail">{systemStatus()}<HistoryList /></div>
+          <div className="overview-rail">{systemStatus()}<ActivityFeed /></div>
         </div>
       </>
     );

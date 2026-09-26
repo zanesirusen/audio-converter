@@ -13,11 +13,45 @@ const FormData = require('form-data');
 const crypto = require('crypto');
 const multer = require('multer');
 const archiver = require('archiver');
+const { Pool } = require('pg');
 require('dotenv').config();
 
-// ==== DECODE COOKIES DARI ENV (buat Railway) ====
-if (process.env.YT_COOKIES_B64) {
+// ==== POSTGRESQL SETUP ====
+let db = null;
+
+async function initDB() {
+    if (!process.env.DATABASE_URL) {
+        console.log('[DB] No DATABASE_URL — using file-based fallback.');
+        return;
+    }
     try {
+        db = new Pool({
+            connectionString: process.env.DATABASE_URL,
+            ssl: { rejectUnauthorized: false }
+        });
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS user_history (
+                user_id TEXT PRIMARY KEY,
+                history JSONB NOT NULL DEFAULT '[]',
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS user_roblox_settings (
+                user_id TEXT PRIMARY KEY,
+                settings JSONB NOT NULL DEFAULT '{}',
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
+        console.log('[DB] ✅ PostgreSQL connected and tables ready.');
+    } catch (err) {
+        console.error('[DB] ❌ Failed to connect:', err.message);
+        db = null;
+    }
+}
+
+initDB();
+
+// ==== DECODE COOKIES DARI ENV (buat Railway) ====
+if (process.env.YT_COOKIES_B64) {    try {
         const cookieContent = Buffer.from(process.env.YT_COOKIES_B64, 'base64').toString('utf-8');
         fs.writeFileSync('./cookies.txt', cookieContent);
         console.log(`[BOOT] ✅ Cookies decoded from env (${cookieContent.length} bytes)`);
@@ -1150,32 +1184,111 @@ app.get('/share/:token', (req, res) => {
 });
 
 // ============================================================
-// SERVER-SIDE HISTORY SYNC (for logged-in Discord users)
+// SERVER-SIDE HISTORY SYNC — PostgreSQL + file fallback
 // ============================================================
-const userHistories = new Map(); // userId → HistoryItem[]
+const HISTORY_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(HISTORY_DIR)) fs.mkdirSync(HISTORY_DIR);
 
-app.get('/api/history', (req, res) => {
+function historyFile(userId) {
+    return path.join(HISTORY_DIR, `history_${userId.replace(/[^a-zA-Z0-9_-]/g, '')}.json`);
+}
+function readHistoryFile(userId) {
+    try {
+        const f = historyFile(userId);
+        if (!fs.existsSync(f)) return [];
+        return JSON.parse(fs.readFileSync(f, 'utf8'));
+    } catch { return []; }
+}
+function writeHistoryFile(userId, history) {
+    try { fs.writeFileSync(historyFile(userId), JSON.stringify(history), 'utf8'); } catch {}
+}
+
+app.get('/api/history', async (req, res) => {
     const session = getSession(req);
     if (!session) return res.status(401).json({ error: 'Not authenticated.' });
     const userId = session.user.id;
-    res.json({ history: userHistories.get(userId) || [] });
+    try {
+        if (db) {
+            const result = await db.query('SELECT history FROM user_history WHERE user_id = $1', [userId]);
+            return res.json({ history: result.rows[0]?.history || [] });
+        }
+        res.json({ history: readHistoryFile(userId) });
+    } catch (err) {
+        console.error('[HISTORY GET]', err.message);
+        res.json({ history: readHistoryFile(userId) });
+    }
 });
 
-app.post('/api/history', (req, res) => {
+app.post('/api/history', async (req, res) => {
     const session = getSession(req);
     if (!session) return res.status(401).json({ error: 'Not authenticated.' });
     const userId = session.user.id;
     const { history } = req.body;
     if (!Array.isArray(history)) return res.status(400).json({ error: 'history must be an array.' });
-    userHistories.set(userId, history.slice(0, 100));
-    res.json({ success: true });
+    const trimmed = history.slice(0, 100);
+    try {
+        if (db) {
+            await db.query(`
+                INSERT INTO user_history (user_id, history, updated_at)
+                VALUES ($1, $2, NOW())
+                ON CONFLICT (user_id) DO UPDATE SET history = $2, updated_at = NOW()
+            `, [userId, JSON.stringify(trimmed)]);
+            return res.json({ success: true });
+        }
+        writeHistoryFile(userId, trimmed);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[HISTORY POST]', err.message);
+        writeHistoryFile(userId, trimmed);
+        res.json({ success: true });
+    }
 });
 
-app.delete('/api/history', (req, res) => {
+app.delete('/api/history', async (req, res) => {
     const session = getSession(req);
     if (!session) return res.status(401).json({ error: 'Not authenticated.' });
-    userHistories.delete(session.user.id);
-    res.json({ success: true });
+    const userId = session.user.id;
+    try {
+        if (db) await db.query('DELETE FROM user_history WHERE user_id = $1', [userId]);
+        try { fs.unlinkSync(historyFile(userId)); } catch {}
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[HISTORY DELETE]', err.message);
+        res.json({ success: true });
+    }
+});
+
+// ==== ROBLOX SETTINGS SYNC ====
+app.get('/api/roblox-settings', async (req, res) => {
+    const session = getSession(req);
+    if (!session) return res.status(401).json({ error: 'Not authenticated.' });
+    try {
+        if (db) {
+            const result = await db.query('SELECT settings FROM user_roblox_settings WHERE user_id = $1', [session.user.id]);
+            return res.json({ settings: result.rows[0]?.settings || null });
+        }
+        res.json({ settings: null });
+    } catch { res.json({ settings: null }); }
+});
+
+app.post('/api/roblox-settings', async (req, res) => {
+    const session = getSession(req);
+    if (!session) return res.status(401).json({ error: 'Not authenticated.' });
+    const { settings } = req.body;
+    if (!settings || typeof settings !== 'object') return res.status(400).json({ error: 'settings wajib.' });
+    try {
+        if (db) {
+            await db.query(`
+                INSERT INTO user_roblox_settings (user_id, settings, updated_at)
+                VALUES ($1, $2, NOW())
+                ON CONFLICT (user_id) DO UPDATE SET settings = $2, updated_at = NOW()
+            `, [session.user.id, JSON.stringify(settings)]);
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[ROBLOX SETTINGS POST]', err.message);
+        res.json({ success: true });
+    }
 });
 
 // SPA fallback: allow direct refreshes on React routes such as /converter.

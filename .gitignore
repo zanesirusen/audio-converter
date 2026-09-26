@@ -4,8 +4,9 @@ node_modules/
 # Build output (Railway builds this itself)
 public/
 
-# Downloads
+# Downloads & user data
 downloads/
+data/
 *.mp3
 *.m4a
 *.aac

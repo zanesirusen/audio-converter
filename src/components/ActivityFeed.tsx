@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SiApple, SiSoundcloud, SiSpotify, SiTiktok, SiYoutube } from 'react-icons/si';
 
 interface ActivityItem {
   username: string;
@@ -12,14 +13,16 @@ interface ActivityItem {
   createdAt: string;
 }
 
-const PLATFORM_ICON: Record<string, string> = {
-  youtube: '▶',
-  spotify: '●',
-  soundcloud: '◎',
-  tiktok: '✦',
-  applemusic: '⌘',
-  upload: '↑',
-};
+function PlatformIcon({ platform }: { platform: string }) {
+  switch (platform) {
+    case 'youtube':    return <SiYoutube className="activity-platform-icon" style={{ color: '#ff6673' }} />;
+    case 'spotify':    return <SiSpotify className="activity-platform-icon" style={{ color: '#57e49a' }} />;
+    case 'soundcloud': return <SiSoundcloud className="activity-platform-icon" style={{ color: '#ff9b55' }} />;
+    case 'tiktok':     return <SiTiktok className="activity-platform-icon" style={{ color: '#82f5ef' }} />;
+    case 'applemusic': return <SiApple className="activity-platform-icon" style={{ color: '#f0f2ff' }} />;
+    default:           return <span className="activity-platform-icon" style={{ color: 'var(--muted)' }}>↑</span>;
+  }
+}
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -80,7 +83,7 @@ export function ActivityFeed() {
             <div className="activity-info">
               <div className="activity-user">
                 <strong>{item.username}</strong>
-                <span className="activity-platform">{PLATFORM_ICON[item.platform] || '♫'}</span>
+                <PlatformIcon platform={item.platform} />
               </div>
               <div className="activity-title">{item.title}</div>
               <div className="activity-meta">{item.format.toUpperCase()} · {timeAgo(item.createdAt)}</div>

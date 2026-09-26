@@ -90,6 +90,8 @@ async function initDB() {
 }
 
 initDB();
+// Initialize activity table after DB is ready
+setTimeout(() => { void initActivityTable(); }, 2000);
 
 // ==== DECODE COOKIES DARI ENV (buat Railway) ====
 if (process.env.YT_COOKIES_B64) {    try {
@@ -1420,18 +1422,67 @@ app.post('/api/roblox-settings', async (req, res) => {
 });
 
 // ============================================================
-// ACTIVITY FEED — recent conversions from all users
+// ACTIVITY FEED — recent conversions from all users, persisted to PostgreSQL
 // ============================================================
-const activityFeed = []; // max 20 items in memory
-const MAX_ACTIVITY = 20;
+let activityCache = []; // in-memory cache, refreshed from DB on start
 
-function logActivity(item) {
-    activityFeed.unshift({ ...item, createdAt: new Date().toISOString() });
-    if (activityFeed.length > MAX_ACTIVITY) activityFeed.pop();
+async function initActivityTable() {
+    if (!db) return;
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS activity_feed (
+                id SERIAL PRIMARY KEY,
+                username TEXT NOT NULL,
+                avatar TEXT,
+                user_id TEXT,
+                title TEXT NOT NULL,
+                artist TEXT,
+                format TEXT,
+                platform TEXT,
+                file_name TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
+        // Load latest 20 into cache
+        const result = await db.query('SELECT * FROM activity_feed ORDER BY created_at DESC LIMIT 20');
+        activityCache = result.rows.map(r => ({
+            username: r.username, avatar: r.avatar, userId: r.user_id,
+            title: r.title, artist: r.artist, format: r.format,
+            platform: r.platform, fileName: r.file_name, createdAt: r.created_at
+        }));
+        console.log(`[ACTIVITY] ✅ Loaded ${activityCache.length} items from DB.`);
+    } catch (err) {
+        console.error('[ACTIVITY] Table init failed:', err.message);
+    }
+}
+
+async function logActivity(item) {
+    // Add to in-memory cache
+    activityCache.unshift({ ...item, createdAt: new Date().toISOString() });
+    if (activityCache.length > 20) activityCache.pop();
+
+    // Persist to PostgreSQL
+    if (db) {
+        try {
+            await db.query(
+                `INSERT INTO activity_feed (username, avatar, user_id, title, artist, format, platform, file_name)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                [item.username, item.avatar || null, item.userId || null,
+                 item.title, item.artist || '', item.format, item.platform, item.fileName]
+            );
+            // Keep DB clean — only keep last 100 rows
+            await db.query(`
+                DELETE FROM activity_feed
+                WHERE id NOT IN (SELECT id FROM activity_feed ORDER BY created_at DESC LIMIT 100)
+            `);
+        } catch (err) {
+            console.error('[ACTIVITY] Insert failed:', err.message);
+        }
+    }
 }
 
 app.get('/api/activity', (req, res) => {
-    res.json({ activity: activityFeed.slice(0, 20) });
+    res.json({ activity: activityCache.slice(0, 20) });
 });
 
 // SPA fallback: allow direct refreshes on React routes such as /converter.

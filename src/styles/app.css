@@ -1175,7 +1175,7 @@ label { font-size: 12px; }
     border-bottom: 1px solid var(--line);
     margin-bottom: 8px;
   }
-  .sidebar-mobile-header .brand { min-width: auto; font-size: 13px; }
+  .sidebar-mobile-header .brand { display: none; }
   .sidebar-mobile-actions { display: flex; align-items: center; gap: 6px; }
   .mobile-close-btn {
     width: 32px; height: 32px;
@@ -1257,14 +1257,13 @@ label { font-size: 12px; }
     align-items: center !important;
     position: fixed !important;
     top: 0; left: 0; right: 0;
-    z-index: 25;
+    z-index: 9999 !important;
     border-bottom: 1px solid var(--line) !important;
-    background: rgba(5,10,19,.96) !important;
+    background: rgba(5,10,19,.98) !important;
   }
   .topbar .brand { display: none; }
   .topbar .account { display: none; }
   .dashboard-main { padding-top: 72px !important; }
-  /* Compact profile button */
   .mobile-topbar-auth .profile-button {
     display: flex;
     align-items: center;
@@ -1284,12 +1283,17 @@ label { font-size: 12px; }
     border-radius: 50%;
     flex-shrink: 0;
   }
-  /* Discord login button */
   .mobile-topbar-auth .discord-button {
     padding: 7px 12px;
     font-size: 12px;
   }
-  /* Hide sidebar auth row */
+  /* Sidebar z-index below topbar */
+  .sidebar {
+    z-index: 8000 !important;
+    top: 56px !important;
+  }
+  /* Hide auth inside sidebar completely */
+  .sidebar-mobile-header { display: none !important; }
   .sidebar-mobile-auth { display: none !important; }
 }
 

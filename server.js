@@ -648,19 +648,17 @@ function convert(input, format, speed = 1.0, amplifyDb = 0, options = {}) {
         const cmd = ffmpeg(input).noVideo();
         const filters = [];
 
+        // Trim: apply before filters via input seek
+        if (options.trimStart) cmd.seekInput(options.trimStart);
+        if (options.trimEnd) cmd.duration(options.trimEnd);
+
         if (options.normalize) filters.push('dynaudnorm=f=150:g=15');
         if (options.removeSilence) filters.push('silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-45dB');
 
-        if (speed !== 1.0) {
-            // rubberband: phase vocoder dengan transient detection
-            // jauh lebih jernih dari atempo di speed tinggi (2x, 2.3x, 3x)
-            // pitch=1.0 → pitch tidak ikut naik (pure time-stretch)
-            // transients=crisp → drum/perkusi tetap tajam
-            // detector=compound → deteksi transient lebih akurat
-            // phase=laminar → phase konsisten, kurangi artifak "phasiness"
-            // formant=shifted → suara vokal lebih natural di speed tinggi
-            // channels=apart → tiap channel diproses independen, lebih stereo
-            filters.push(`rubberband=tempo=${speed.toFixed(3)}:pitch=1.0:transients=crisp:detector=compound:phase=laminar:formant=shifted:channels=apart`);
+        const pitchVal = options.pitch || 1.0;
+        if (speed !== 1.0 || pitchVal !== 1.0) {
+            // rubberband supports both tempo and pitch independently
+            filters.push(`rubberband=tempo=${speed.toFixed(3)}:pitch=${pitchVal.toFixed(3)}:transients=crisp:detector=compound:phase=laminar:formant=shifted:channels=apart`);
         }
 
         if (amplifyDb !== 0) {
@@ -720,7 +718,7 @@ app.post('/api/detect', async (req, res) => {
 });
 
 app.post('/api/convert', upload.single('file'), async (req, res) => {
-    const { url, format, speed, amplify, normalize, removeSilence } = req.body;
+    const { url, format, speed, pitch, amplify, normalize, removeSilence, trimStart, trimEnd } = req.body;
     const uploadedFile = req.file;
     if ((!url && !uploadedFile) || !format) return res.status(400).json({ error: 'URL atau file audio dan format wajib.' });
     if (!FORMATS[format]) return res.status(400).json({ error: `Format "${format}" nggak didukung.` });
@@ -728,6 +726,11 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
     const speedNum = parseFloat(speed) || 1.0;
     if (speedNum < 0.5 || speedNum > 3.0) {
         return res.status(400).json({ error: 'Speed harus antara 0.5 dan 3.0' });
+    }
+
+    const pitchNum = parseFloat(pitch) || 1.0;
+    if (pitchNum < 0.5 || pitchNum > 2.0) {
+        return res.status(400).json({ error: 'Pitch harus antara 0.5 dan 2.0' });
     }
 
     const amplifyNum = parseFloat(amplify) || 0;
@@ -786,6 +789,9 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
         const converted = await convert(sourcePath, format, speedNum, amplifyNum, {
             normalize: Boolean(normalize),
             removeSilence: Boolean(removeSilence),
+            pitch: pitchNum,
+            trimStart: trimStart || null,
+            trimEnd: trimEnd || null,
             outputBase
         });
 

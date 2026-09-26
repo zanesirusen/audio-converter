@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import '../styles/app.css';
 import { LandingPage } from '../pages/LandingPage';
 import { ConverterPanel } from '../features/converter/ConverterPanel.tsx';
@@ -6,6 +6,7 @@ import { BulkConverterPanel } from '../features/converter/BulkConverterPanel';
 import { RobloxSettingsPage } from '../features/roblox/RobloxSettingsPage';
 import { AssetLibrary } from '../features/assets/AssetLibrary';
 import { HistoryList } from '../components/HistoryList';
+import { ToastContainer } from '../components/Toast';
 import { getCurrentUser } from '../services/discord';
 import { AuthPanel, type AuthUser } from '../features/auth/AuthPanel';
 import { useHistory, loadHistoryFromServer } from '../stores/appStore';
@@ -33,11 +34,12 @@ export function App() {
   const robloxSettings = useRobloxSettings();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  // Small delay before showing landing page to prevent flash
   const [showLanding, setShowLanding] = useState(false);
   const [page, setPage] = useState<Page>(() => pageFromPath(window.location.pathname));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [serviceHealth, setServiceHealth] = useState<ServiceHealth>({ youtube: true, spotify: true, roblox: true, converter: true, loading: true });
+  const [pageKey, setPageKey] = useState(0);
+  const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     void getCurrentUser()
@@ -93,6 +95,7 @@ export function App() {
     event?.preventDefault();
     window.history.pushState({}, '', path);
     setPage(pageFromPath(path));
+    setPageKey((k) => k + 1);
     setMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -100,6 +103,7 @@ export function App() {
   function navigateTo(path: string) {
     window.history.pushState({}, '', path);
     setPage(pageFromPath(path));
+    setPageKey((k) => k + 1);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -307,10 +311,15 @@ export function App() {
             <Link href={routes.bulk} className="side-link">▱ <span>Bulk convert</span></Link>
           </div>
         </aside>
-        <main className="dashboard-main">{renderPage()}</main>
+        <main className="dashboard-main" ref={mainRef}>
+          <div key={pageKey} className="page-transition">
+            {renderPage()}
+          </div>
+        </main>
       </div>
         </>
       )}
+      <ToastContainer />
     </div>
   );
 }

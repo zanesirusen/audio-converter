@@ -273,6 +273,22 @@ function TypewriterCard() {
   );
 }
 
+// ── Scroll reveal hook ───────────────────────────────────────
+function useReveal() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { el.classList.add('revealed'); observer.disconnect(); } },
+      { threshold: 0.12 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return ref;
+}
+
 // ── Discord SVG icon ─────────────────────────────────────────
 function DiscordIcon() {
   return (
@@ -284,6 +300,10 @@ function DiscordIcon() {
 
 // ── Main landing page ────────────────────────────────────────
 export function LandingPage() {
+  const statsRef = useReveal();
+  const featuresRef = useReveal();
+  const platformsRef = useReveal();
+  const ctaRef = useReveal();
   return (
     <div className="landing">
 
@@ -324,7 +344,7 @@ export function LandingPage() {
       </section>
 
       {/* Stats */}
-      <div className="landing-stats">
+      <div className="landing-stats reveal-el" ref={statsRef}>
         <div><strong>5</strong><span>Platforms supported</span></div>
         <div><strong>8</strong><span>Output formats</span></div>
         <div><strong>0.5–3×</strong><span>Speed range</span></div>
@@ -332,7 +352,7 @@ export function LandingPage() {
       </div>
 
       {/* Features */}
-      <section className="landing-features">
+      <section className="landing-features reveal-el" ref={featuresRef}>
         <div className="landing-section-label">
           <span className="landing-eyebrow">Platform capabilities</span>
           <h2>Everything You Need in One Workspace</h2>
@@ -373,7 +393,7 @@ export function LandingPage() {
       </section>
 
       {/* Platforms */}
-      <section className="landing-platforms">
+      <section className="landing-platforms reveal-el" ref={platformsRef}>
         <span className="landing-eyebrow">Supported sources</span>
         <div className="landing-platform-list">
           <span>▶ YouTube</span>
@@ -386,7 +406,7 @@ export function LandingPage() {
       </section>
 
       {/* Final CTA */}
-      <section className="landing-final-cta">
+      <section className="landing-final-cta reveal-el" ref={ctaRef}>
         <h2>Ready to convert?</h2>
         <p>Login with your Discord account to get started. Free, no setup required.</p>
         <button className="landing-cta-primary" onClick={startDiscordLogin}>

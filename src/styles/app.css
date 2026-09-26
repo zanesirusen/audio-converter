@@ -259,32 +259,51 @@ label { display: grid; gap: 6px; color: #a8b5cc; font-size: 9px; font-weight: 60
 }
 
 @media (max-width: 820px) {
-  .topbar { height: 0; padding: 0; border: 0; background: transparent; position: static; }
-  .topbar .brand, .topbar .account { display: none; }
-  .mobile-menu-toggle {
+  /* ── Topbar: visible, hamburger pojok kanan ── */
+  .topbar {
+    height: 56px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(5,10,19,.98);
     position: fixed;
-    top: 16px;
-    left: 16px;
-    z-index: 30;
-    display: inline-flex;
+    top: 0; left: 0; right: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
+  .topbar .brand { display: flex; min-width: auto; flex: 1; }
+  .topbar .account { display: none; }
+  /* Hamburger di kanan */
+  .mobile-menu-toggle {
+    display: inline-flex;
+    position: static;
+    order: 99;
+    margin-left: auto;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+  /* Sidebar: full width, muncul di bawah topbar */
   .sidebar {
     position: fixed;
-    top: 16px;
-    left: 14px;
-    right: 14px;
-    z-index: 20;
-    width: auto;
+    top: 56px;
+    left: 0; right: 0;
+    z-index: 8000;
+    width: 100%;
     flex-basis: auto;
     min-height: auto;
+    max-height: calc(100vh - 56px);
+    overflow-y: auto;
     display: none;
     flex-direction: column;
-    gap: 6px;
-    padding: 12px 10px 10px;
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    background: rgba(8, 15, 27, .96);
-    box-shadow: 0 24px 48px rgba(0, 0, 0, .28);
+    padding: 16px 18px;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: rgba(6,14,25,.98);
+    box-shadow: 0 8px 32px rgba(0,0,0,.4);
     backdrop-filter: blur(16px);
   }
   .sidebar.open { display: flex; }
@@ -296,6 +315,26 @@ label { display: grid; gap: 6px; color: #a8b5cc; font-size: 9px; font-weight: 60
   .hero-art { position: absolute; right: 10px; opacity: .35; }
   .controls-grid { grid-template-columns: 1fr 1fr; }
   .tool-cards, .asset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Sidebar mobile header: profile only */
+  .sidebar-mobile-header {
+    display: flex;
+    align-items: center;
+    padding: 0 0 12px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 10px;
+  }
+  .sidebar-mobile-profile { flex: 1; min-width: 0; }
+  .sidebar-mobile-profile .profile-button {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 8px 10px;
+    font-size: 13px;
+    gap: 9px;
+  }
+  .sidebar-mobile-profile .profile-button img { width: 28px; height: 28px; border-radius: 50%; }
+  .sidebar-mobile-auth { display: none !important; }
+  .mobile-close-btn { display: none !important; }
+  .mobile-topbar-auth { display: none !important; }
 }
 
 @media (max-width: 700px) {
@@ -1240,66 +1279,8 @@ label { font-size: 12px; }
 .activity-meta { font-size: 10px; color: var(--subtle); margin-top: 2px; }
 
 /* ================================================================
-   MOBILE TOPBAR AUTH — avatar + logout next to hamburger
+   MOBILE TOPBAR AUTH — not used, hamburger goes to sidebar
    ================================================================ */
 .mobile-topbar-auth { display: none; }
-
-@media (max-width: 820px) {
-  .mobile-topbar-auth { display: none !important; }
-  .topbar {
-    height: 56px !important;
-    padding: 0 14px !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 10px !important;
-    position: fixed !important;
-    top: 0; left: 0; right: 0;
-    z-index: 9999 !important;
-    border-bottom: 1px solid var(--line) !important;
-    background: rgba(5,10,19,.98) !important;
-  }
-  /* Brand di kiri, hamburger di kanan */
-  .topbar .brand { display: flex !important; min-width: auto !important; flex: 1; order: 1; }
-  .topbar .account { display: flex !important; order: 2; gap: 6px; }
-  .topbar .account .auth-loading,
-  .topbar .account .discord-button,
-  .topbar .account .profile-button { display: none !important; }
-  /* Hamburger pindah ke kanan */
-  .mobile-menu-toggle {
-    order: 3;
-    margin-left: 0;
-    margin-right: 0;
-    flex-shrink: 0;
-  }
-  .dashboard-main { padding-top: 64px !important; }
-  .sidebar { z-index: 8000 !important; top: 56px !important; }
-  /* Sidebar: profile di atas tanpa close button */
-  .sidebar-mobile-header {
-    display: flex !important;
-    align-items: center;
-    padding: 0 0 12px;
-    border-bottom: 1px solid var(--line);
-    margin-bottom: 10px;
-  }
-  .sidebar-mobile-profile { flex: 1; min-width: 0; }
-  .sidebar-mobile-profile .profile-button {
-    width: 100%;
-    justify-content: flex-start;
-    padding: 8px 10px;
-    font-size: 13px;
-    gap: 9px;
-  }
-  .sidebar-mobile-profile .profile-button img { width: 28px; height: 28px; border-radius: 50%; }
-  .sidebar-mobile-auth { display: none !important; }
-  .mobile-close-btn { display: none !important; }
-}
-
-@media (max-width: 400px) {
-  .mobile-topbar-auth .profile-button {
-    padding: 5px 8px;
-    font-size: 11px;
-    gap: 5px;
-  }
-}
 
 .activity-platform-icon { width: 13px; height: 13px; flex-shrink: 0; }

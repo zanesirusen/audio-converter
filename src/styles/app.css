@@ -4,7 +4,7 @@
 .topbar { height: 64px; display: flex; align-items: center; gap: 26px; padding: 0 28px; border-bottom: 1px solid var(--line); background: rgba(5, 10, 19, .88); backdrop-filter: blur(18px); position: sticky; top: 0; z-index: 5; }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 205px; font-family: 'Space Grotesk'; font-weight: 700; letter-spacing: .03em; }
 .brand small { display: block; color: var(--muted); font: 600 10px 'DM Sans'; letter-spacing: .13em; margin-top: 2px; }
-.brand-mark { display: grid; place-items: center; width: 36px; height: 36px; overflow: hidden; border-radius: 50%; color: transparent; background: #172044 url('/Profile.png') center / cover no-repeat; box-shadow: 0 8px 25px rgba(103, 72, 255, .34); font-size: 0; }
+.brand-mark { display: grid; place-items: center; width: 40px; height: 40px; overflow: hidden; border-radius: 50%; color: transparent; background: #172044 url('/Profile.png') center / cover no-repeat; box-shadow: 0 8px 25px rgba(103, 72, 255, .34); font-size: 0; }
 .brand-mark::before { content: ''; }
 .brand > span:last-child { font-size: 0; }
 .brand > span:last-child::before { content: '3Zane'; font: 700 17px 'Space Grotesk'; letter-spacing: .03em; }
@@ -1255,20 +1255,35 @@ label { font-size: 12px; }
     padding: 0 14px !important;
     display: flex !important;
     align-items: center !important;
+    gap: 10px !important;
     position: fixed !important;
     top: 0; left: 0; right: 0;
     z-index: 9999 !important;
     border-bottom: 1px solid var(--line) !important;
     background: rgba(5,10,19,.98) !important;
   }
-  .topbar .brand { display: none; }
+  /* Show brand on mobile too */
+  .topbar .brand {
+    display: flex !important;
+    min-width: auto;
+    flex: 1;
+  }
+  .topbar .brand small { display: block; }
   .topbar .account { display: none; }
-  .dashboard-main { padding-top: 72px !important; }
+  .dashboard-main { padding-top: 64px !important; }
+  /* Hamburger */
+  .mobile-menu-toggle {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+  }
+  /* Compact profile button */
   .mobile-topbar-auth .profile-button {
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 6px 10px;
+    gap: 6px;
+    padding: 5px 10px;
     font-size: 12px;
     font-weight: 600;
     border: 1px solid var(--line);
@@ -1276,23 +1291,25 @@ label { font-size: 12px; }
     color: #d9e4f6;
     border-radius: 8px;
     white-space: nowrap;
+    flex-shrink: 0;
   }
   .mobile-topbar-auth .profile-button img {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     flex-shrink: 0;
   }
   .mobile-topbar-auth .discord-button {
-    padding: 7px 12px;
+    padding: 6px 10px;
     font-size: 12px;
+    flex-shrink: 0;
   }
-  /* Sidebar z-index below topbar */
+  /* Sidebar below topbar */
   .sidebar {
     z-index: 8000 !important;
     top: 56px !important;
   }
-  /* Hide auth inside sidebar completely */
+  /* Hide auth inside sidebar */
   .sidebar-mobile-header { display: none !important; }
   .sidebar-mobile-auth { display: none !important; }
 }

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRobloxSettings, saveRobloxSettings, clearRobloxSettings } from '../../stores/robloxSettingsStore';
+import { useHistory } from '../../stores/appStore';
 
 export function RobloxSettingsPage() {
   const saved = useRobloxSettings();
+  const history = useHistory();
 
-  // Local form state (drafts — not committed until Save)
   const [apiKey, setApiKey] = useState(saved.apiKey);
   const [creatorType, setCreatorType] = useState<'user' | 'group'>(saved.creatorType);
   const [creatorId, setCreatorId] = useState(saved.creatorId);
@@ -13,6 +14,10 @@ export function RobloxSettingsPage() {
   const [apiKeyStatus, setApiKeyStatus] = useState<string>(
     saved.apiKeyValid ? '✓ API key saved & validated' : saved.apiKey ? 'API key saved but not validated yet' : ''
   );
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [hasWrite, setHasWrite] = useState(saved.apiKeyValid);
+  const [apiKeyWarn, setApiKeyWarn] = useState<string>('');
+
   const [creatorStatus, setCreatorStatus] = useState<string>(
     saved.creatorValid ? `✓ ${saved.creatorName || saved.creatorId} saved & validated` : saved.creatorId ? 'Creator ID saved but not validated yet' : ''
   );
@@ -22,23 +27,46 @@ export function RobloxSettingsPage() {
   const [validatingCreator, setValidatingCreator] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
+  // Auto-detect asset name from last converted file
+  useEffect(() => {
+    if (!defaultAssetName && history.length > 0) {
+      const last = history[0];
+      const autoName = last.title ? last.title.slice(0, 40) : '';
+      if (autoName) setDefaultAssetName(autoName);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleValidateKey() {
     if (!apiKey.trim()) { setApiKeyStatus('API key tidak boleh kosong.'); setApiKeyOk(false); return; }
     setValidatingKey(true);
     setApiKeyStatus('Checking…');
+    setPermissions([]);
+    setApiKeyWarn('');
     try {
       const res = await fetch('/api/roblox/validate-key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ api_key: apiKey.trim() }),
       });
-      const data = await res.json() as { valid: boolean; message?: string; error?: string };
+      const data = await res.json() as {
+        valid: boolean;
+        message?: string;
+        error?: string;
+        permissions?: string[];
+        has_write?: boolean;
+        warning?: string | null;
+      };
       if (data.valid) {
         setApiKeyStatus(`✓ ${data.message || 'API key valid.'}`);
         setApiKeyOk(true);
+        setPermissions(data.permissions || []);
+        setHasWrite(data.has_write ?? true);
+        if (data.warning) setApiKeyWarn(data.warning);
       } else {
         setApiKeyStatus(`✗ ${data.error || 'API key tidak valid.'}`);
         setApiKeyOk(false);
+        setHasWrite(false);
       }
     } catch {
       setApiKeyStatus('✗ Gagal menghubungi server.');
@@ -60,12 +88,12 @@ export function RobloxSettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = await res.json() as { valid: boolean; name?: string; displayName?: string; error?: string };
+      const data = await res.json() as { valid: boolean; name?: string; displayName?: string; memberCount?: number; error?: string };
       if (data.valid) {
         const name = data.displayName || data.name || creatorId.trim();
-        setCreatorStatus(`✓ ${name} (${creatorType})`);
+        const extra = data.memberCount ? ` · ${data.memberCount.toLocaleString()} members` : '';
+        setCreatorStatus(`✓ ${name} (${creatorType})${extra}`);
         setCreatorOk(true);
-        // Save display name for later use
         saveRobloxSettings({ creatorName: name });
       } else {
         setCreatorStatus(`✗ ${data.error || 'Creator tidak ditemukan.'}`);
@@ -85,7 +113,7 @@ export function RobloxSettingsPage() {
       creatorType,
       creatorId: creatorId.trim(),
       defaultAssetName: defaultAssetName.trim(),
-      apiKeyValid: apiKeyOk,
+      apiKeyValid: apiKeyOk && hasWrite,
       creatorValid: creatorOk,
     });
     setSaveMsg('✓ Settings saved!');
@@ -94,19 +122,14 @@ export function RobloxSettingsPage() {
 
   function handleClear() {
     clearRobloxSettings();
-    setApiKey('');
-    setCreatorType('user');
-    setCreatorId('');
-    setDefaultAssetName('');
-    setApiKeyStatus('');
-    setCreatorStatus('');
-    setApiKeyOk(false);
-    setCreatorOk(false);
+    setApiKey(''); setCreatorType('user'); setCreatorId(''); setDefaultAssetName('');
+    setApiKeyStatus(''); setCreatorStatus(''); setApiKeyOk(false); setCreatorOk(false);
+    setPermissions([]); setHasWrite(false); setApiKeyWarn('');
     setSaveMsg('Settings cleared.');
     setTimeout(() => setSaveMsg(''), 3000);
   }
 
-  const isReady = apiKeyOk && creatorOk;
+  const isReady = apiKeyOk && hasWrite && creatorOk;
   const isDirty =
     apiKey.trim() !== saved.apiKey ||
     creatorType !== saved.creatorType ||
@@ -115,14 +138,12 @@ export function RobloxSettingsPage() {
 
   return (
     <div className="settings-page">
-      {/* ── Header ── */}
       <div className="settings-header">
         <div>
           <span className="eyebrow">⌘ Roblox</span>
           <h1>Roblox Settings</h1>
           <p className="muted">Simpan API key dan Creator ID kamu sekali, lalu publish langsung dari halaman Converter.</p>
         </div>
-        {/* Connection status badge */}
         <div className={`settings-status-badge ${isReady ? 'ready' : 'not-ready'}`}>
           <span className={`status-dot ${isReady ? '' : 'red'}`} />
           {isReady ? 'Ready to publish' : 'Not configured'}
@@ -130,14 +151,13 @@ export function RobloxSettingsPage() {
       </div>
 
       <div className="settings-grid">
-        {/* ── Left: forms ── */}
         <div className="settings-forms">
 
-          {/* API Key */}
+          {/* ── API Key ── */}
           <section className="panel settings-section">
             <div className="settings-section-header">
               <div>
-                <span className={`settings-step-badge ${apiKeyOk ? 'done' : ''}`}>{apiKeyOk ? '✓' : '01'}</span>
+                <span className={`settings-step-badge ${apiKeyOk && hasWrite ? 'done' : ''}`}>{apiKeyOk && hasWrite ? '✓' : '01'}</span>
                 <h2>Open Cloud API Key</h2>
               </div>
               <p className="muted">Buat API key di <a href="https://create.roblox.com/credentials" target="_blank" rel="noopener noreferrer" className="settings-link">Roblox Creator Hub</a> dengan permission <code>asset:write</code>.</p>
@@ -149,16 +169,12 @@ export function RobloxSettingsPage() {
                   id="api-key-input"
                   type="password"
                   value={apiKey}
-                  onChange={(e) => { setApiKey(e.target.value); setApiKeyOk(false); setApiKeyStatus(''); }}
+                  onChange={(e) => { setApiKey(e.target.value); setApiKeyOk(false); setApiKeyStatus(''); setPermissions([]); setApiKeyWarn(''); }}
                   placeholder="Paste API key kamu di sini"
                   className="settings-input"
                   autoComplete="off"
                 />
-                <button
-                  className="secondary-button"
-                  onClick={() => void handleValidateKey()}
-                  disabled={validatingKey || !apiKey.trim()}
-                >
+                <button className="secondary-button" onClick={() => void handleValidateKey()} disabled={validatingKey || !apiKey.trim()}>
                   {validatingKey ? '…' : 'Validate'}
                 </button>
               </div>
@@ -167,33 +183,43 @@ export function RobloxSettingsPage() {
                   {apiKeyStatus}
                 </span>
               )}
+              {/* Permission badges */}
+              {permissions.length > 0 && (
+                <div className="permission-badges">
+                  <span className="permission-label">Detected permissions:</span>
+                  {permissions.map(p => (
+                    <span key={p} className={`permission-badge ${p === 'asset:write' ? 'perm-write' : 'perm-read'}`}>
+                      {p === 'asset:write' ? '✓' : '◎'} {p}
+                    </span>
+                  ))}
+                  {!permissions.includes('asset:write') && (
+                    <span className="permission-badge perm-missing">✗ asset:write missing</span>
+                  )}
+                </div>
+              )}
+              {apiKeyWarn && (
+                <div className="settings-key-warn">
+                  ⚠ {apiKeyWarn}
+                  <a href="https://create.roblox.com/credentials" target="_blank" rel="noopener noreferrer" className="settings-link"> → Fix on Roblox</a>
+                </div>
+              )}
             </div>
           </section>
 
-          {/* Creator ID */}
+          {/* ── Creator ID ── */}
           <section className="panel settings-section">
             <div className="settings-section-header">
               <div>
                 <span className={`settings-step-badge ${creatorOk ? 'done' : ''}`}>{creatorOk ? '✓' : '02'}</span>
                 <h2>Creator Destination</h2>
               </div>
-              <p className="muted">User ID atau Group ID tempat audio akan di-publish. Bisa dicek di URL profil Roblox kamu.</p>
+              <p className="muted">User ID atau Group ID tempat audio akan di-publish.</p>
             </div>
             <div className="settings-field">
               <label>Creator type</label>
               <div className="settings-type-toggle">
-                <button
-                  className={`type-btn ${creatorType === 'user' ? 'active' : ''}`}
-                  onClick={() => { setCreatorType('user'); setCreatorOk(false); setCreatorStatus(''); }}
-                >
-                  👤 User
-                </button>
-                <button
-                  className={`type-btn ${creatorType === 'group' ? 'active' : ''}`}
-                  onClick={() => { setCreatorType('group'); setCreatorOk(false); setCreatorStatus(''); }}
-                >
-                  👥 Group
-                </button>
+                <button className={`type-btn ${creatorType === 'user' ? 'active' : ''}`} onClick={() => { setCreatorType('user'); setCreatorOk(false); setCreatorStatus(''); }}>👤 User</button>
+                <button className={`type-btn ${creatorType === 'group' ? 'active' : ''}`} onClick={() => { setCreatorType('group'); setCreatorOk(false); setCreatorStatus(''); }}>👥 Group</button>
               </div>
             </div>
             <div className="settings-field">
@@ -207,11 +233,7 @@ export function RobloxSettingsPage() {
                   placeholder={`Masukkan ${creatorType === 'user' ? 'user' : 'group'} ID`}
                   className="settings-input"
                 />
-                <button
-                  className="secondary-button"
-                  onClick={() => void handleValidateCreator()}
-                  disabled={validatingCreator || !creatorId.trim()}
-                >
+                <button className="secondary-button" onClick={() => void handleValidateCreator()} disabled={validatingCreator || !creatorId.trim()}>
                   {validatingCreator ? '…' : 'Validate'}
                 </button>
               </div>
@@ -223,51 +245,56 @@ export function RobloxSettingsPage() {
             </div>
           </section>
 
-          {/* Default asset name */}
+          {/* ── Default asset name ── */}
           <section className="panel settings-section">
             <div className="settings-section-header">
               <div>
                 <span className="settings-step-badge">03</span>
-                <h2>Asset Name (opsional)</h2>
+                <h2>Default Asset Name</h2>
               </div>
-              <p className="muted">Prefix default untuk nama asset di Roblox. Kalau kosong akan pakai judul lagu.</p>
+              <p className="muted">Nama default untuk asset. Kalau kosong akan pakai judul lagu otomatis.</p>
             </div>
             <div className="settings-field">
-              <label htmlFor="default-asset-input">Default asset name prefix</label>
-              <input
-                id="default-asset-input"
-                type="text"
-                value={defaultAssetName}
-                onChange={(e) => setDefaultAssetName(e.target.value)}
-                placeholder="Contoh: MyGame_"
-                className="settings-input"
-                maxLength={40}
-              />
+              <label htmlFor="default-asset-input">Asset name / prefix</label>
+              <div className="settings-input-row">
+                <input
+                  id="default-asset-input"
+                  type="text"
+                  value={defaultAssetName}
+                  onChange={(e) => setDefaultAssetName(e.target.value)}
+                  placeholder={history[0]?.title || 'Contoh: MyGame_BGM'}
+                  className="settings-input"
+                  maxLength={50}
+                />
+                {history[0] && !defaultAssetName && (
+                  <button className="secondary-button" onClick={() => setDefaultAssetName(history[0].title.slice(0, 50))}>
+                    Auto-fill
+                  </button>
+                )}
+              </div>
+              {history[0] && (
+                <span className="settings-field-status muted-status">
+                  Last converted: {history[0].title} · {history[0].format.toUpperCase()}
+                </span>
+              )}
             </div>
           </section>
 
-          {/* Save / Clear buttons */}
+          {/* ── Save / Clear ── */}
           <div className="settings-actions">
-            <button
-              className="convert-button settings-save-btn"
-              onClick={handleSave}
-              disabled={!apiKey.trim() || !creatorId.trim()}
-            >
+            <button className="convert-button settings-save-btn" onClick={handleSave} disabled={!apiKey.trim() || !creatorId.trim()}>
               {isDirty ? 'Save Settings' : 'Settings Saved'}
             </button>
-            <button className="secondary-button" onClick={handleClear}>
-              Clear all
-            </button>
+            <button className="secondary-button" onClick={handleClear}>Clear all</button>
             {saveMsg && <span className={`settings-save-msg ${saveMsg.startsWith('✓') ? 'ok' : ''}`}>{saveMsg}</span>}
           </div>
         </div>
 
-        {/* ── Right: status summary ── */}
+        {/* ── Right rail ── */}
         <aside className="settings-rail">
           <section className="panel settings-summary">
             <span className="eyebrow">Current config</span>
             <h3>Saved settings</h3>
-
             <div className="summary-row">
               <span className="summary-label">API Key</span>
               <span className={`summary-value ${saved.apiKeyValid ? 'ok' : 'missing'}`}>
@@ -277,11 +304,7 @@ export function RobloxSettingsPage() {
             <div className="summary-row">
               <span className="summary-label">Creator</span>
               <span className={`summary-value ${saved.creatorValid ? 'ok' : 'missing'}`}>
-                {saved.creatorId
-                  ? saved.creatorValid
-                    ? `✓ ${saved.creatorName || saved.creatorId}`
-                    : `⚠ ${saved.creatorId} (not validated)`
-                  : '— Not set'}
+                {saved.creatorId ? (saved.creatorValid ? `✓ ${saved.creatorName || saved.creatorId}` : `⚠ ${saved.creatorId}`) : '— Not set'}
               </span>
             </div>
             <div className="summary-row">
@@ -290,15 +313,12 @@ export function RobloxSettingsPage() {
             </div>
             {saved.defaultAssetName && (
               <div className="summary-row">
-                <span className="summary-label">Name prefix</span>
+                <span className="summary-label">Asset name</span>
                 <span className="summary-value">{saved.defaultAssetName}</span>
               </div>
             )}
-
             <div className={`summary-ready-box ${isReady ? 'ready' : ''}`}>
-              {isReady
-                ? '✅ Everything configured — go to Converter to publish!'
-                : '⚠ Validate API key and Creator ID, then Save to enable publishing.'}
+              {isReady ? '✅ Everything configured — go to Converter to publish!' : '⚠ Validate API key (with asset:write) and Creator ID, then Save.'}
             </div>
           </section>
 
@@ -307,9 +327,11 @@ export function RobloxSettingsPage() {
             <ol className="settings-guide-steps">
               <li>Buka <a href="https://create.roblox.com/credentials" target="_blank" rel="noopener noreferrer" className="settings-link">create.roblox.com/credentials</a></li>
               <li>Klik <strong>Create API Key</strong></li>
-              <li>Di bagian <em>Access Permissions</em>, tambahkan <strong>Assets API</strong></li>
-              <li>Set operation: <strong>asset:write</strong></li>
-              <li>Copy key dan paste di form sebelah kiri</li>
+              <li>Di <em>Access Permissions</em>, pilih <strong>Assets API</strong></li>
+              <li>Tambahkan operation: <strong>asset:write</strong></li>
+              <li>Di <em>Security</em>, tambahkan IP atau biarkan kosong untuk semua IP</li>
+              <li>Klik <strong>Save &amp; Generate Key</strong></li>
+              <li>Copy key → paste di form kiri</li>
             </ol>
           </section>
         </aside>

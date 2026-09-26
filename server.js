@@ -900,27 +900,91 @@ app.post('/api/roblox/validate-group', async (req, res) => {
 app.post('/api/roblox/validate-key', async (req, res) => {
     const { api_key } = req.body;
     if (!api_key) return res.status(400).json({ valid: false, error: 'API key wajib.' });
+    if (api_key.length < 50) return res.json({ valid: false, error: 'Format API key terlalu pendek.' });
 
-    if (api_key.length < 50) {
-        return res.json({ valid: false, error: 'Format API key kependekan.' });
-    }
+    const permissions = [];
+    let keyOwner = null;
 
+    // Test 1: asset:read — list assets
     try {
         await axios.get('https://apis.roblox.com/assets/v1/assets?limit=1', {
             headers: { 'x-api-key': api_key },
             timeout: 10000
         });
-        res.json({ valid: true, message: 'API key valid.' });
+        permissions.push('asset:read');
     } catch (err) {
         const status = err.response?.status;
         if (status === 401) {
-            return res.json({ valid: false, error: 'API key invalid (401 Unauthorized).' });
+            return res.json({ valid: false, error: 'API key tidak valid atau sudah expired (401).' });
+        }
+        // 403 = key valid tapi no read permission, that's fine
+        if (status !== 403) {
+            // Other error — key might still be valid
+        }
+    }
+
+    // Test 2: asset:write — try uploading empty payload to check permission
+    // We use a minimal multipart to probe permission without actually uploading
+    try {
+        const FormData = require('form-data');
+        const probeForm = new FormData();
+        probeForm.append('request', JSON.stringify({
+            assetType: 'Audio',
+            displayName: '__permission_probe__',
+            description: '',
+            creationContext: { creator: { userId: '0' } }
+        }), { contentType: 'application/json' });
+        // Send empty file to trigger permission check before validation
+        probeForm.append('fileContent', Buffer.alloc(0), { filename: 'probe.ogg', contentType: 'audio/ogg' });
+
+        await axios.post('https://apis.roblox.com/assets/v1/assets', probeForm, {
+            headers: { ...probeForm.getHeaders(), 'x-api-key': api_key },
+            timeout: 10000,
+            maxBodyLength: Infinity
+        });
+        permissions.push('asset:write');
+    } catch (err) {
+        const status = err.response?.status;
+        const errMsg = err.response?.data?.message || '';
+        if (status === 401) {
+            return res.json({ valid: false, error: 'API key tidak valid atau sudah expired (401).' });
         }
         if (status === 403) {
-            return res.json({ valid: true, message: 'API key valid (tapi cek permission asset:write).' });
+            // 403 = key valid but no asset:write permission
+            // Don't add to permissions
+        } else if (status === 400 || errMsg.toLowerCase().includes('invalid') || errMsg.toLowerCase().includes('creator')) {
+            // 400 = key valid, has write permission, but payload invalid — that's expected
+            permissions.push('asset:write');
+        } else if (status === 422 || errMsg.toLowerCase().includes('user')) {
+            permissions.push('asset:write');
+        } else {
+            // Other errors — assume write permission exists if key passed read check
+            if (permissions.includes('asset:read')) {
+                permissions.push('asset:write');
+            }
         }
-        res.json({ valid: true, message: 'API key format OK.' });
     }
+
+    const hasWrite = permissions.includes('asset:write');
+    const hasRead = permissions.includes('asset:read');
+
+    if (!hasWrite && !hasRead) {
+        return res.json({
+            valid: false,
+            error: 'API key valid tapi tidak punya permission yang dibutuhkan. Pastikan ada permission asset:write.',
+            permissions: []
+        });
+    }
+
+    return res.json({
+        valid: true,
+        message: hasWrite
+            ? `✓ API key valid · Permissions: ${permissions.join(', ')}`
+            : `✓ API key valid tapi hanya punya asset:read — tambahkan asset:write di Roblox Creator Hub`,
+        permissions,
+        has_write: hasWrite,
+        warning: !hasWrite ? 'Perlu tambah permission asset:write untuk publish audio' : null
+    });
 });
 
 // ============================================================

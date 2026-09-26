@@ -1210,3 +1210,14 @@ label { font-size: 12px; }
 .publish-detail-links { gap: 10px; }
 .publish-link { color: var(--blue-bright); font-size: 12px; font-weight: 600; text-decoration: underline; }
 .publish-link:hover { color: #fff; }
+
+/* ================================================================
+   ROBLOX API PERMISSION BADGES
+   ================================================================ */
+.permission-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.permission-label { color: var(--muted); font-size: 11px; font-weight: 600; }
+.permission-badge { padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+.perm-write { color: #fff; background: #00b06b; border: 1px solid rgba(0,176,107,.4); }
+.perm-read { color: var(--cyan); background: rgba(67,216,207,.12); border: 1px solid rgba(67,216,207,.3); }
+.perm-missing { color: var(--danger); background: rgba(255,133,142,.1); border: 1px solid rgba(255,133,142,.3); }
+.settings-key-warn { margin-top: 8px; padding: 8px 11px; background: rgba(231,174,90,.08); border: 1px solid rgba(231,174,90,.3); border-radius: 6px; color: var(--gold); font-size: 12px; }

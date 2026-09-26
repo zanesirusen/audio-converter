@@ -92,6 +92,8 @@ async function initDB() {
 initDB();
 // Initialize activity table after DB is ready
 setTimeout(() => { void initActivityTable(); }, 2000);
+// Initialize session table after DB is ready
+setTimeout(() => { void initSessionTable(); }, 2500);
 
 // ==== DECODE COOKIES DARI ENV (buat Railway) ====
 if (process.env.YT_COOKIES_B64) {    try {
@@ -120,8 +122,60 @@ const upload = multer({
     }
 });
 
-const sessions = new Map();
+const sessions = new Map(); // in-memory cache
 const requestBuckets = new Map();
+
+// ── Persist sessions to PostgreSQL ───────────────────────────
+async function initSessionTable() {
+    if (!db) return;
+    try {
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS sessions (
+                session_id TEXT PRIMARY KEY,
+                user_data JSONB NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                expires_at TIMESTAMPTZ NOT NULL
+            );
+        `);
+        // Load non-expired sessions into memory cache
+        const result = await db.query(
+            'SELECT session_id, user_data FROM sessions WHERE expires_at > NOW()'
+        );
+        for (const row of result.rows) {
+            sessions.set(row.session_id, { user: row.user_data, createdAt: Date.now() });
+        }
+        console.log(`[SESSION] ✅ Loaded ${result.rows.length} sessions from DB.`);
+        // Clean expired sessions
+        await db.query('DELETE FROM sessions WHERE expires_at <= NOW()');
+    } catch (err) {
+        console.error('[SESSION] Table init failed:', err.message);
+    }
+}
+
+async function saveSession(sessionId, userData) {
+    sessions.set(sessionId, { user: userData, createdAt: Date.now() });
+    if (!db) return;
+    try {
+        const expiresAt = new Date(Date.now() + 30 * 24 * 3600000); // 30 days
+        await db.query(`
+            INSERT INTO sessions (session_id, user_data, expires_at)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (session_id) DO UPDATE SET user_data = $2, expires_at = $3
+        `, [sessionId, JSON.stringify(userData), expiresAt]);
+    } catch (err) {
+        console.error('[SESSION] Save failed:', err.message);
+    }
+}
+
+async function deleteSession(sessionId) {
+    sessions.delete(sessionId);
+    if (!db) return;
+    try {
+        await db.query('DELETE FROM sessions WHERE session_id = $1', [sessionId]);
+    } catch (err) {
+        console.error('[SESSION] Delete failed:', err.message);
+    }
+}
 
 function rateLimit(req, res, next) {
     const now = Date.now();
@@ -251,7 +305,7 @@ app.get('/api/auth/discord/callback', async (req, res) => {
             headers: { Authorization: `${token.data.token_type} ${token.data.access_token}` }
         });
         const sessionId = crypto.randomBytes(32).toString('hex');
-        sessions.set(sessionId, { user: profile.data, createdAt: Date.now() });
+        await saveSession(sessionId, profile.data);
         setCookie(res, 'audio_session', sessionId);
         res.redirect('/?auth=success');
     } catch (error) {
@@ -261,9 +315,9 @@ app.get('/api/auth/discord/callback', async (req, res) => {
     }
 });
 
-app.post('/api/auth/logout', (req, res) => {
+app.post('/api/auth/logout', async (req, res) => {
     const sessionId = readCookies(req).audio_session;
-    if (sessionId) sessions.delete(sessionId);
+    if (sessionId) await deleteSession(sessionId);
     setCookie(res, 'audio_session', '', 0);
     res.json({ success: true });
 });

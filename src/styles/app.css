@@ -1239,3 +1239,59 @@ label { font-size: 12px; }
 .activity-platform { font-size: 11px; color: var(--muted); flex-shrink: 0; }
 .activity-title { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
 .activity-meta { font-size: 10px; color: var(--subtle); margin-top: 2px; }
+
+/* ================================================================
+   MOBILE TOPBAR AUTH — avatar + logout next to hamburger
+   ================================================================ */
+.mobile-topbar-auth { display: none; }
+
+@media (max-width: 820px) {
+  /* Show mobile auth in topbar */
+  .mobile-topbar-auth {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    margin-right: 0;
+  }
+  /* Topbar needs to be visible in mobile for the auth row */
+  .topbar {
+    height: 56px !important;
+    padding: 0 14px !important;
+    display: flex !important;
+    align-items: center !important;
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 25;
+    border-bottom: 1px solid var(--line) !important;
+    background: rgba(5,10,19,.96) !important;
+  }
+  /* Hide desktop brand + account, show only hamburger + mobile auth */
+  .topbar .brand { display: none; }
+  .topbar .account { display: none; }
+  /* Dashboard main needs top padding for fixed topbar */
+  .dashboard-main { padding-top: 72px !important; }
+  /* Compact profile button on mobile */
+  .mobile-topbar-auth .profile-button {
+    padding: 5px 8px;
+    font-size: 12px;
+    gap: 7px;
+  }
+  .mobile-topbar-auth .profile-button img {
+    width: 26px;
+    height: 26px;
+  }
+  /* Hide sidebar auth since it's now in topbar */
+  .sidebar-mobile-auth { display: none !important; }
+}
+
+@media (max-width: 400px) {
+  /* Very small screens: show only avatar, hide username text */
+  .mobile-topbar-auth .profile-button span:not(:first-child) {
+    display: none;
+  }
+  .mobile-topbar-auth .profile-button {
+    padding: 4px 6px;
+  }
+}

@@ -293,6 +293,10 @@ export function App() {
           </button>
           <AuthPanel user={user} loading={authLoading} />
         </div>
+        {/* Mobile: auth shown next to hamburger */}
+        <div className="mobile-topbar-auth">
+          <AuthPanel user={user} loading={authLoading} />
+        </div>
       </header>
       <div className="dashboard-shell">
         <aside className={`sidebar ${mobileMenuOpen ? 'open' : ''}`}>

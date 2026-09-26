@@ -4,6 +4,14 @@ import { convertUploadedAudio, downloadUrl, type ConvertResult } from '../../ser
 import { addHistory } from '../../stores/appStore';
 
 const formats = ['mp3', 'm4a', 'aac', 'ogg', 'opus', 'flac', 'wav', 'wma'];
+
+const FORMAT_META: Record<string, { badge?: string; badgeClass?: string }> = {
+  mp3:  { badge: 'Roblox ✓', badgeClass: 'badge-roblox' },
+  ogg:  { badge: 'Roblox ✓', badgeClass: 'badge-roblox' },
+  wav:  { badge: 'Roblox ✓', badgeClass: 'badge-roblox' },
+  flac: { badge: 'Lossless', badgeClass: 'badge-lossless' },
+};
+
 type FileStatus = 'Queued' | 'Converting' | 'Done' | 'Failed';
 interface BulkFile { id: string; file: File; duration: string; status: FileStatus; error?: string; result?: ConvertResult; }
 
@@ -19,6 +27,7 @@ export function BulkConverterPanel() {
   const [removeSilence, setRemoveSilence] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [zipping, setZipping] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const totalSize = useMemo(() => items.reduce((total, item) => total + item.file.size, 0), [items]);
@@ -62,15 +71,171 @@ export function BulkConverterPanel() {
     setBusy(false);
   }
 
-  function downloadAll() {
-    results.forEach((result, index) => { window.setTimeout(() => { const link = document.createElement('a'); link.href = downloadUrl(result.file.name); link.download = result.file.name; link.click(); }, index * 250); });
+  async function downloadAllZip() {
+    if (!results.length || zipping) return;
+    setZipping(true);
+    try {
+      const fileUrls = results.map((r) => `/downloads/${encodeURIComponent(r.file.name)}`);
+      const res = await fetch('/api/bulk-zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: fileUrls }),
+      });
+      if (!res.ok) throw new Error('ZIP failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'audio-batch.zip';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch {
+      // Fall back to individual downloads
+      results.forEach((result, index) => {
+        window.setTimeout(() => {
+          const link = document.createElement('a');
+          link.href = downloadUrl(result.file.name);
+          link.download = result.file.name;
+          link.click();
+        }, index * 250);
+      });
+    } finally {
+      setZipping(false);
+    }
   }
 
-  return <section className="bulk-page">
-    <div className="page-header"><span className="eyebrow">Batch workspace</span><h1>Bulk convert audio</h1><p>Upload multiple files, apply one set of settings, and keep every converted result in your history.</p></div>
-    <div className="bulk-layout"><div className="bulk-main">
-      <section className="panel bulk-upload-panel"><div className="panel-heading"><div><span className="eyebrow">1 · Source files</span><h2>Upload your audio batch</h2><p className="muted">Choose multiple files or drag them into the drop zone.</p></div><span className="bulk-count">{items.length} files · {sizeLabel(totalSize)}</span></div><div className={`bulk-dropzone ${dragging ? 'dragging' : ''}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} onClick={() => inputRef.current?.click()}><input ref={inputRef} type="file" multiple accept="audio/*,.flac,.wav,.ogg,.opus" onChange={(event) => addFiles(Array.from(event.target.files || []))} /><span className="upload-icon">↑</span><strong>Drop audio files here</strong><span>or click to choose multiple files · up to 200 MB each</span></div>{items.length > 0 && <div className="bulk-file-list">{items.map((item) => <div className="bulk-file-row" key={item.id}><div className="bulk-file-icon">♫</div><div className="bulk-file-copy"><strong>{item.file.name}</strong><span>{sizeLabel(item.file.size)} · {item.duration}</span>{item.error && <small>{item.error}</small>}</div><span className={`bulk-status ${item.status.toLowerCase()}`}>{item.status}</span><button className="bulk-remove" type="button" aria-label={`Remove ${item.file.name}`} onClick={() => removeFile(item.id)}>×</button></div>)}</div>}</section>
-      <section className="panel bulk-settings"><div className="section-heading"><div><span className="eyebrow">2 · Global settings</span><h2>Apply to every file</h2><p>These settings will be used for the entire batch.</p></div></div><div className="format-options"><span className="format-label">Output format</span>{formats.map((item) => <button className={format === item ? 'format-option active' : 'format-option'} type="button" key={item} onClick={() => setFormat(item)}>{item.toUpperCase()}</button>)}</div><div className="controls-grid"><label>Speed <output>{speed.toFixed(1)}x</output><input type="range" min="0.5" max="3" step="0.1" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /></label><label>Amplify <output>{amplify > 0 ? '+' : ''}{amplify} dB</output><input type="range" min="-20" max="10" step="1" value={amplify} onChange={(event) => setAmplify(Number(event.target.value))} /></label></div><div className="tools-grid"><label className="check-label"><input type="checkbox" checked={normalize} onChange={(event) => setNormalize(event.target.checked)} /> Normalize volume</label><label className="check-label"><input type="checkbox" checked={removeSilence} onChange={(event) => setRemoveSilence(event.target.checked)} /> Remove silence</label></div><div className="bulk-playback"><span className="eyebrow">Roblox playback speed</span><strong>{playbackNormal.toFixed(2)}</strong><span>Applied to every converted file</span></div><button className="convert-button" type="button" onClick={() => void convertAll()} disabled={!items.length || busy}>{busy ? `Converting ${completed}/${items.length}...` : 'Convert all files'}</button></section>
-    </div><aside className="bulk-rail"><section className="panel bulk-progress"><div className="rail-heading"><h3>Batch progress</h3><span>{completed} / {items.length || 0} files</span></div><div className="bulk-progress-track"><span style={{ width: `${progress}%` }} /></div><strong>{progress}% complete</strong><p>{busy ? 'Processing files one by one...' : items.length ? 'Ready to convert this batch.' : 'Add files to start a batch.'}</p></section>{results.length > 0 && <section className="panel bulk-results"><div className="rail-heading"><h3>Completed files</h3><button className="text-button" type="button" onClick={downloadAll}>Download all</button></div>{results.map((result) => <div className="bulk-result" key={result.file.name}><div><strong>{result.file.name}</strong><span>{result.file.size_mb} MB · {result.format.toUpperCase()}</span></div><DownloadButton compact url={downloadUrl(result.file.name)} filename={result.file.name} /></div>)}</section>}</aside></div>
-  </section>;
+  return (
+    <section className="bulk-page">
+      <div className="page-header">
+        <span className="eyebrow">Batch workspace</span>
+        <h1>Bulk convert audio</h1>
+        <p>Upload multiple files, apply one set of settings, and keep every converted result in your history.</p>
+      </div>
+      <div className="bulk-layout">
+        <div className="bulk-main">
+          {/* ── Source files ── */}
+          <section className="panel bulk-upload-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">1 · Source files</span>
+                <h2>Upload your audio batch</h2>
+                <p className="muted">Choose multiple files or drag them into the drop zone.</p>
+              </div>
+              <div className="bulk-header-actions">
+                <span className="bulk-count">{items.length} files · {sizeLabel(totalSize)}</span>
+                {items.length > 0 && !busy && (
+                  <button className="text-button" onClick={clearFiles}>Clear all</button>
+                )}
+              </div>
+            </div>
+            <div
+              className={`bulk-dropzone ${dragging ? 'dragging' : ''}`}
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => inputRef.current?.click()}
+            >
+              <input ref={inputRef} type="file" multiple accept="audio/*,.flac,.wav,.ogg,.opus" onChange={(e) => addFiles(Array.from(e.target.files || []))} />
+              <span className="upload-icon">↑</span>
+              <strong>Drop audio files here</strong>
+              <span>or click to choose multiple files · up to 200 MB each</span>
+            </div>
+            {items.length > 0 && (
+              <div className="bulk-file-list">
+                {items.map((item) => (
+                  <div className="bulk-file-row" key={item.id}>
+                    <div className="bulk-file-icon">♫</div>
+                    <div className="bulk-file-copy">
+                      <strong>{item.file.name}</strong>
+                      <span>{sizeLabel(item.file.size)} · {item.duration}</span>
+                      {item.error && <small>{item.error}</small>}
+                    </div>
+                    <span className={`bulk-status ${item.status.toLowerCase()}`}>{item.status}</span>
+                    <button className="bulk-remove" type="button" aria-label={`Remove ${item.file.name}`} onClick={() => removeFile(item.id)}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* ── Settings ── */}
+          <section className="panel bulk-settings">
+            <div className="section-heading">
+              <div>
+                <span className="eyebrow">2 · Global settings</span>
+                <h2>Apply to every file</h2>
+                <p>These settings will be used for the entire batch.</p>
+              </div>
+            </div>
+            <div className="format-options">
+              <span className="format-label">Output format</span>
+              {formats.map((f) => {
+                const fm = FORMAT_META[f];
+                return (
+                  <button
+                    className={`format-option${format === f ? ' active' : ''}`}
+                    type="button"
+                    key={f}
+                    onClick={() => setFormat(f)}
+                  >
+                    {f.toUpperCase()}
+                    {fm?.badge && <span className={`format-badge ${fm.badgeClass ?? ''}`}>{fm.badge}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="controls-grid">
+              <label>Speed <output>{speed.toFixed(1)}x</output>
+                <input type="range" min="0.5" max="3" step="0.1" value={speed} onChange={(e) => setSpeed(Number(e.target.value))} />
+              </label>
+              <label>Amplify <output>{amplify > 0 ? '+' : ''}{amplify} dB</output>
+                <input type="range" min="-20" max="10" step="1" value={amplify} onChange={(e) => setAmplify(Number(e.target.value))} />
+              </label>
+            </div>
+            <div className="tools-grid">
+              <label className="check-label"><input type="checkbox" checked={normalize} onChange={(e) => setNormalize(e.target.checked)} /> Normalize volume</label>
+              <label className="check-label"><input type="checkbox" checked={removeSilence} onChange={(e) => setRemoveSilence(e.target.checked)} /> Remove silence</label>
+            </div>
+            <div className="bulk-playback">
+              <span className="eyebrow">Roblox playback speed</span>
+              <strong>{playbackNormal.toFixed(2)}</strong>
+              <span>Applied to every converted file</span>
+            </div>
+            <button className="convert-button" type="button" onClick={() => void convertAll()} disabled={!items.length || busy}>
+              {busy ? `Converting ${completed}/${items.length}…` : 'Convert all files'}
+            </button>
+          </section>
+        </div>
+
+        {/* ── Rail ── */}
+        <aside className="bulk-rail">
+          <section className="panel bulk-progress">
+            <div className="rail-heading"><h3>Batch progress</h3><span>{completed} / {items.length || 0} files</span></div>
+            <div className="bulk-progress-track"><span style={{ width: `${progress}%` }} /></div>
+            <strong>{progress}% complete</strong>
+            <p>{busy ? `Processing file ${completed + 1} of ${items.length}…` : items.length ? 'Ready to convert this batch.' : 'Add files to start a batch.'}</p>
+          </section>
+          {results.length > 0 && (
+            <section className="panel bulk-results">
+              <div className="rail-heading">
+                <h3>Completed files</h3>
+                <button className="text-button" type="button" onClick={() => void downloadAllZip()} disabled={zipping}>
+                  {zipping ? 'Zipping…' : '⬇ Download ZIP'}
+                </button>
+              </div>
+              {results.map((result) => (
+                <div className="bulk-result" key={result.file.name}>
+                  <div>
+                    <strong>{result.file.name}</strong>
+                    <span>{result.file.size_mb} MB · {result.format.toUpperCase()}</span>
+                  </div>
+                  <DownloadButton compact url={downloadUrl(result.file.name)} filename={result.file.name} />
+                </div>
+              ))}
+            </section>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
 }

@@ -25,8 +25,85 @@
     <meta name="twitter:image" content="https://3zane.up.railway.app/3Zane.png" />
     <meta name="twitter:image:alt" content="3Zane audio converter" />
     <title>3Zane | Audio Converter</title>
+    <style>
+      /* ── Splash screen — shown before React mounts ── */
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        background: #050a13;
+        transition: opacity 0.35s ease, visibility 0.35s ease;
+      }
+      #splash.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .splash-logo {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: #172044 url('/Profile.png') center / cover no-repeat;
+        box-shadow: 0 0 0 0 rgba(118, 91, 255, 0.6);
+        animation: splash-pulse 1.6s ease-in-out infinite;
+      }
+      .splash-brand {
+        font-family: 'Space Grotesk', 'DM Sans', system-ui, sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        color: #edf3ff;
+      }
+      .splash-sub {
+        font-family: 'DM Sans', system-ui, sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: #53627d;
+        margin-top: -12px;
+      }
+      .splash-bar-wrap {
+        width: 120px;
+        height: 3px;
+        background: rgba(255,255,255,0.07);
+        border-radius: 99px;
+        overflow: hidden;
+        margin-top: 8px;
+      }
+      .splash-bar {
+        height: 100%;
+        border-radius: 99px;
+        background: linear-gradient(90deg, #765bff, #5d8dff);
+        animation: splash-bar 1.4s ease-in-out infinite;
+      }
+      @keyframes splash-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(118, 91, 255, 0.5); }
+        50%       { box-shadow: 0 0 0 14px rgba(118, 91, 255, 0); }
+      }
+      @keyframes splash-bar {
+        0%   { width: 0%;   margin-left: 0; }
+        50%  { width: 70%;  margin-left: 0; }
+        100% { width: 0%;   margin-left: 100%; }
+      }
+    </style>
   </head>
   <body>
+    <!-- Splash screen: visible before React JS loads -->
+    <div id="splash">
+      <div class="splash-logo"></div>
+      <div class="splash-brand">3ZANE</div>
+      <div class="splash-sub">audio workspace</div>
+      <div class="splash-bar-wrap">
+        <div class="splash-bar"></div>
+      </div>
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

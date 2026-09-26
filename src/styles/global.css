@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
-:root {
+:root,
+[data-theme="dark"] {
   font-family: 'DM Sans', sans-serif;
   color: #edf3ff;
   background: #050a13;
@@ -20,6 +21,29 @@
   --gold: #e7ae5a;
   --danger: #ff858e;
   --shadow: 0 20px 60px rgba(0, 0, 0, .28);
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  font-family: 'DM Sans', sans-serif;
+  color: #0d1829;
+  font-synthesis: none;
+  --bg: #f0f4fb;
+  --surface: #ffffff;
+  --surface-raised: #e8eef8;
+  --surface-soft: rgba(210, 220, 240, .68);
+  --line: rgba(100, 130, 190, .2);
+  --muted: #5a6a85;
+  --subtle: #8a9ab5;
+  --text: #0d1829;
+  --blue: #5540e0;
+  --blue-bright: #3b73e8;
+  --cyan: #0fa8a0;
+  --green: #1da87a;
+  --gold: #c07a10;
+  --danger: #d93040;
+  --shadow: 0 8px 32px rgba(30, 60, 120, .12);
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -27,7 +51,19 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0;
   min-width: 320px;
+  background: var(--bg);
+  color: var(--text);
+  transition: background 0.2s, color 0.2s;
+}
+
+[data-theme="dark"] body,
+[data-theme="dark"] {
   background: radial-gradient(circle at 30% -10%, rgba(76, 88, 255, .13), transparent 34rem), radial-gradient(circle at 100% 20%, rgba(34, 178, 206, .07), transparent 31rem), var(--bg);
+}
+
+[data-theme="light"] body,
+[data-theme="light"] {
+  background: radial-gradient(circle at 30% -10%, rgba(86, 108, 255, .07), transparent 34rem), radial-gradient(circle at 100% 20%, rgba(34, 178, 206, .04), transparent 31rem), var(--bg);
 }
 button, input, select { font: inherit; }
 button { cursor: pointer; }

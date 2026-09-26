@@ -4,5 +4,5 @@ export const routes = {
   bulk: '/bulk',
   assets: '/assets',
   history: '/history',
-  roblox: '/roblox',
+  roblox: '/settings',   // was /roblox, now points to settings page
 };

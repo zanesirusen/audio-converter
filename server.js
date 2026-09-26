@@ -12,6 +12,7 @@ const { v4: uuidv4 } = require('uuid');
 const FormData = require('form-data');
 const crypto = require('crypto');
 const multer = require('multer');
+const archiver = require('archiver');
 require('dotenv').config();
 
 // ==== DECODE COOKIES DARI ENV (buat Railway) ====
@@ -617,10 +618,15 @@ function convert(input, format, speed = 1.0, amplifyDb = 0, options = {}) {
         if (options.removeSilence) filters.push('silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-45dB');
 
         if (speed !== 1.0) {
-            let s = speed;
-            while (s > 2.0) { filters.push('atempo=2.0'); s /= 2.0; }
-            while (s < 0.5) { filters.push('atempo=0.5'); s /= 0.5; }
-            filters.push(`atempo=${s.toFixed(3)}`);
+            // rubberband: phase vocoder dengan transient detection
+            // jauh lebih jernih dari atempo di speed tinggi (2x, 2.3x, 3x)
+            // pitch=1.0 → pitch tidak ikut naik (pure time-stretch)
+            // transients=crisp → drum/perkusi tetap tajam
+            // detector=compound → deteksi transient lebih akurat
+            // phase=laminar → phase konsisten, kurangi artifak "phasiness"
+            // formant=shifted → suara vokal lebih natural di speed tinggi
+            // channels=apart → tiap channel diproses independen, lebih stereo
+            filters.push(`rubberband=tempo=${speed.toFixed(3)}:pitch=1.0:transients=crisp:detector=compound:phase=laminar:formant=shifted:channels=apart`);
         }
 
         if (amplifyDb !== 0) {
@@ -1059,6 +1065,117 @@ app.post('/api/roblox/check-status', async (req, res) => {
                 : 'Cek log server.'
         });
     }
+});
+
+// ============================================================
+// BULK ZIP DOWNLOAD
+// ============================================================
+app.post('/api/bulk-zip', (req, res) => {
+    const { files } = req.body;
+    if (!Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: 'files array wajib.' });
+    }
+
+    const resolvedFiles = files.map(f => {
+        const decodedName = decodeURIComponent(path.basename(f));
+        return { name: decodedName, filePath: path.join(DIR, decodedName) };
+    }).filter(f => fs.existsSync(f.filePath));
+
+    if (resolvedFiles.length === 0) {
+        return res.status(404).json({ error: 'Tidak ada file yang ditemukan.' });
+    }
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="audio-batch.zip"');
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.on('error', err => {
+        console.error('[ZIP] Error:', err.message);
+        if (!res.headersSent) res.status(500).json({ error: err.message });
+    });
+
+    archive.pipe(res);
+    for (const f of resolvedFiles) {
+        archive.file(f.filePath, { name: f.name });
+    }
+    archive.finalize();
+});
+
+// ============================================================
+// SHARE LINKS — generate a short-lived share token
+// ============================================================
+const shareTokens = new Map(); // token → { fileName, expiresAt }
+
+// Clean up expired share tokens every 15 minutes
+setInterval(() => {
+    const now = Date.now();
+    for (const [token, data] of shareTokens.entries()) {
+        if (now > data.expiresAt) shareTokens.delete(token);
+    }
+}, 900000);
+
+app.post('/api/share', (req, res) => {
+    const { file_url } = req.body;
+    if (!file_url) return res.status(400).json({ error: 'file_url wajib.' });
+
+    const decodedName = decodeURIComponent(path.basename(file_url));
+    const filePath = path.join(DIR, decodedName);
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'File tidak ditemukan di server.' });
+    }
+
+    const token = crypto.randomBytes(20).toString('hex');
+    const expiresAt = Date.now() + 3600000; // 1 hour
+    shareTokens.set(token, { fileName: decodedName, expiresAt });
+
+    const host = req.headers.host || 'localhost:3000';
+    const protocol = req.headers['x-forwarded-proto'] || 'http';
+    res.json({
+        success: true,
+        share_url: `${protocol}://${host}/share/${token}`,
+        expires_in: '1 hour'
+    });
+});
+
+app.get('/share/:token', (req, res) => {
+    const data = shareTokens.get(req.params.token);
+    if (!data) return res.status(404).send('Link ini sudah kadaluarsa atau tidak valid.');
+    if (Date.now() > data.expiresAt) {
+        shareTokens.delete(req.params.token);
+        return res.status(410).send('Link ini sudah kadaluarsa.');
+    }
+    const filePath = path.join(DIR, data.fileName);
+    if (!fs.existsSync(filePath)) return res.status(404).send('File sudah tidak tersedia.');
+    res.download(filePath, data.fileName);
+});
+
+// ============================================================
+// SERVER-SIDE HISTORY SYNC (for logged-in Discord users)
+// ============================================================
+const userHistories = new Map(); // userId → HistoryItem[]
+
+app.get('/api/history', (req, res) => {
+    const session = getSession(req);
+    if (!session) return res.status(401).json({ error: 'Not authenticated.' });
+    const userId = session.user.id;
+    res.json({ history: userHistories.get(userId) || [] });
+});
+
+app.post('/api/history', (req, res) => {
+    const session = getSession(req);
+    if (!session) return res.status(401).json({ error: 'Not authenticated.' });
+    const userId = session.user.id;
+    const { history } = req.body;
+    if (!Array.isArray(history)) return res.status(400).json({ error: 'history must be an array.' });
+    userHistories.set(userId, history.slice(0, 100));
+    res.json({ success: true });
+});
+
+app.delete('/api/history', (req, res) => {
+    const session = getSession(req);
+    if (!session) return res.status(401).json({ error: 'Not authenticated.' });
+    userHistories.delete(session.user.id);
+    res.json({ success: true });
 });
 
 // SPA fallback: allow direct refreshes on React routes such as /converter.

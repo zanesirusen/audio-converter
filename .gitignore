@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Build output (Railway builds this itself)
+public/
+
 # Downloads
 downloads/
 *.mp3
